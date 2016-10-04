@@ -12,9 +12,9 @@ def git_gifs(threadID, num_gifs):
     global giphy_api
     global path
     for i in range(num_gifs):
-        response = urllib2.urlopen(giphy_api)
-        html = response.read()
         try:
+            response = urllib2.urlopen(giphy_api)
+            html = response.read()
             match = re.search("image_original_url\"\:\"([^\"]+)", html)
             gif_url = match.group(1).replace("\\", "")
 
