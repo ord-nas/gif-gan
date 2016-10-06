@@ -13,6 +13,7 @@ parser.add_argument("--output_path", type=str, required=True)
 parser.add_argument("--num_videos", type=int, default = 10)
 parser.add_argument("--input_type", type=str, default = "gif")
 parser.add_argument("--output_type", type=str, default = "png")
+parser.add_argument("--frame_rate", type=int, default = 10)
 args = parser.parse_args()
 
 # set parameters
@@ -34,6 +35,10 @@ output_type = args.output_type
 if (output_type != "png" and output_type != "gif" and output_type != "jpg"):
     sys.exit("Unknown output type \"" + output_type + "\".")
 
+frame_rate = args.frame_rate
+if (frame_rate <= 0):
+    sys.exit("Invalid frame rate.")
+
 # main loop
 count = 1
 for file in os.listdir(input_path):
@@ -43,7 +48,7 @@ for file in os.listdir(input_path):
         output_file_path = os.path.join(output_path, file_name)
         if not os.path.isdir(output_file_path):
             os.mkdir(output_file_path)
-            cmd = " ".join(["ffmpeg -i", input_file_path, os.path.join(output_file_path, "frame_%d." + output_type)])
+            cmd = " ".join(["ffmpeg -i", input_file_path, "-r", str(frame_rate), os.path.join(output_file_path, "frame_%d." + output_type)])
             # print cmd
             os.system(cmd)
         
