@@ -30,19 +30,22 @@ class Detection:
             self.y1,
             self.x2,
             self.y2)
-    def __init__(self, rect, frame_number):
+    def __init__(self, rect, frame_number, interpolated=False):
         # rect is a tuple (x1, y1, width, height)
         self.x1 = rect[0]
         self.y1 = rect[1]
         self.x2 = rect[0] + rect[2]
         self.y2 = rect[1] + rect[3]
         self.frame_number = frame_number
+        self.interpolated = interpolated
     @property
     def height(self):
         return self.y2 - self.y1
     @property
     def width(self):
         return self.x2 - self.x1
+    def as_vec(self):
+        return np.array([self.x1, self.y1, self.width, self.height])
 
 
 # Params for algorithm
@@ -90,8 +93,8 @@ def process(f):
     frame_number = 0
     frame_size = None
     while(cap.isOpened()):
-        print
-        print
+        #print
+        #print
         
         ret, im = cap.read()
         if not ret:
@@ -116,15 +119,15 @@ def process(f):
                 if j >= min_jaccard:
                     scored_matches.append( (j, (current, track)) )
         scored_matches.sort(reverse=True)
-        print scored_matches
+        #print scored_matches
         for (j, (current, track)) in scored_matches:
             if current not in current_detections:
                 # We already matched this with someone
                 continue
             skip = frame_number - track[-1].frame_number - 1
-            print "track",track,"skip", skip
+            #print "track",track,"skip", skip
             if skip <= max_skip:
-                print "assigned",current,"to",track
+                #print "assigned",current,"to",track
                 track.append(current)
                 current_detections.remove(current)
                 # Update histograms
@@ -134,32 +137,53 @@ def process(f):
 
         # Everything that wasn't paired becomes a new track
         for current in current_detections:
-            print "new track for",current
+            #print "new track for",current
             tracks.append([current])
 
         #out.write(im)
         frame_number += 1
-        print "frame",frame_number
+        #print "frame",frame_number
 
-    # Do a last pass over the tracks and filter out the bad ones
+    # Do a last pass over the tracks, filtering out the bad ones and interpolating
+    # missing frames
     valid_tracks = []
     for track in tracks:
+        # Drop track if invalid
         frame_count = track[-1].frame_number - track[0].frame_number + 1
         if frame_count < min_frame_count:
-            print "dropped track because frame count! Was",frame_count,"not",min_frame_count
+            #print "dropped track because frame count! Was",frame_count,"not",min_frame_count
             cnt_drop_because_low_frame_count += 1
             continue
         num_detections = len(track)
         if num_detections < min_total_detections:
-            print "dropped track because total detections! Was",num_detections,"not",min_total_detections
+            #print "dropped track because total detections! Was",num_detections,"not",min_total_detections
             cnt_drop_because_low_total_detections += 1
             continue
+
+        # Okay track is valid. Interpolate missing frames.
+        interpolated_track = []
+        for i in range(len(track)-1):
+            d1 = track[i]
+            d2 = track[i+1]
+            interpolated_track.append(d1)
+            frame_delta = d2.frame_number - d1.frame_number
+            rect_delta = d2.as_vec() - d1.as_vec()
+            for frm in range(d1.frame_number+1,d2.frame_number):
+                fraction = float(frm - d1.frame_number)/frame_delta
+                new_rect = d1.as_vec() + fraction*rect_delta
+                new_rect = np.round(new_rect).astype('int32')
+                new_detection = Detection(new_rect, frm, interpolated=True)
+                interpolated_track.append(new_detection)
+                detections_per_frame[frm].append(new_detection)
+                print "interpolated",d1,"+",d2,"@",frm,"=>",new_detection
+        interpolated_track.append(track[-1])
+                
         inc(hst_frame_count, frame_count)
         inc(hst_total_detections, num_detections)
-        valid_tracks.append(track)
-
+        valid_tracks.append(interpolated_track)
+        
     # Do another run through the video, and colour the detections.
-    # White for dropped detections, and other colours for tracks
+    # White for dropped detections, and other colours for tracks.
 
     # First colour the tracks
     coloured_tracks = zip(valid_tracks, cycle(colours))
@@ -168,7 +192,7 @@ def process(f):
     cap = cv2.VideoCapture("/home/sandro/Documents/ECE496/gif-gan/data_collection/gifs/" + f + ".mp4")
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     out = cv2.VideoWriter(
-        "/home/sandro/Documents/ECE496/gif-gan/data_collection/tracks_v1/" + f + ".avi",
+        "/home/sandro/Documents/ECE496/gif-gan/data_collection/tracks_v1_interpolated/" + f + ".avi",
         fourcc, 25.0, frame_size)
 
     frame_number = 0
@@ -178,7 +202,7 @@ def process(f):
             break
         
         detections = detections_per_frame[frame_number]
-        print "at frame",frame_number,"got detections",detections
+        #print "at frame",frame_number,"got detections",detections
         frame_number += 1
 
         for d in detections:
@@ -188,7 +212,9 @@ def process(f):
             for (track, colour) in coloured_tracks:
                 if d in track:
                     # This detection is in a track! Colour it appropriately
-                    print "found!"
+                    #print "found!"
+                    if d.interpolated:
+                        cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), (255,255,255), 6)
                     cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), colour, 2)
                     break
 
