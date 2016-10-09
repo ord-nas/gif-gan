@@ -38,6 +38,7 @@ class Detection:
         self.y2 = rect[1] + rect[3]
         self.frame_number = frame_number
         self.interpolated = interpolated
+        self.too_big = False
     @property
     def height(self):
         return self.y2 - self.y1
@@ -67,10 +68,15 @@ colours = [
     np.array([255,0,255]), # magenta
     np.array([255,255,0]), # cyan
 ]
+# Pretty big for now so we can examine it
+target_width = 500
+target_height = 500
+bounding_box_scaling_factor = 1.0 # Iunno
 
 # Drop counters (in priority order, higher to lower)
 cnt_drop_because_low_frame_count = 0
 cnt_drop_because_low_total_detections = 0
+cnt_drop_because_bb_too_big = 0
 
 # Histograms
 hst_frame_count = {}
@@ -79,12 +85,35 @@ hst_skip = {}
 hst_jaccard = {}
 hst_jaccard_bin_size = 0.01
 
+def get_crop(im, d):
+    # # Expand the box along one axis so the aspect ratio is correct
+    # required_aspect_ratio = float(target_width)/float(target_height)
+    # actual_aspect_ratio = float(d.width)/float(d.height)
+    # scaling = required_aspect_ratio / actual_aspect_ratio
+    # x_scaling = scaling if scaling > 1.0 else 1.0
+    # y_scaling = 1.0/scaling if scaling <= 1.0 else 1.0
+    # # Expand the box by a scaling factor
+    # centre_x = (d.x1 + d.x2)/2
+    # centre_y = (d.y1 + d.y2)/2
+    # x1 = x_scaling * bounding_box_scaling_factor * (d.x1 - centre_x) + centre_x
+    # y1 = y_scaling * bounding_box_scaling_factor * (d.y1 - centre_y) + centre_y
+    # x2 = x_scaling * bounding_box_scaling_factor * (d.x2 - centre_x) + centre_x
+    # y2 = y_scaling * bounding_box_scaling_factor * (d.y2 - centre_y) + centre_y
+    # pass
+    # Methods are cv2.INTER_CUBIC (slow) and cv2.INTER_LINEAR (fast but worse)
+    crop = im[d.y1:d.y2+1,d.x1:d.x2+1]
+    res = cv2.resize(crop,(target_width,target_height), interpolation = cv2.INTER_LINEAR)
+    #return (np.ones([target_height, target_width, 3]) * c).astype('uint8')
+    return res
+
 def process(f):
     global cnt_drop_because_low_total_detections
     global cnt_drop_because_low_frame_count
+    global cnt_drop_because_bb_too_big
     # Temp
     global coloured_tracks
     global detections_per_frame
+    global expanded_tracks
     
     cap = cv2.VideoCapture("/home/sandro/Documents/ECE496/gif-gan/data_collection/gifs/" + f + ".mp4")
     
@@ -175,13 +204,50 @@ def process(f):
                 new_detection = Detection(new_rect, frm, interpolated=True)
                 interpolated_track.append(new_detection)
                 detections_per_frame[frm].append(new_detection)
-                print "interpolated",d1,"+",d2,"@",frm,"=>",new_detection
+                #print "interpolated",d1,"+",d2,"@",frm,"=>",new_detection
         interpolated_track.append(track[-1])
                 
         inc(hst_frame_count, frame_count)
         inc(hst_total_detections, num_detections)
         valid_tracks.append(interpolated_track)
-        
+
+    # Okay we need to scale all the rectangles and potentially throw out
+    # some stuff if the rectangles get too big, lol.
+    expanded_tracks = []
+    for track in valid_tracks:
+        drop_track = False
+        new_track = []
+        for d in track:
+            # Expand the box along one axis so the aspect ratio is correct
+            required_aspect_ratio = float(target_width)/float(target_height)
+            actual_aspect_ratio = float(d.width)/float(d.height)
+            scaling = required_aspect_ratio / actual_aspect_ratio
+            x_scaling = scaling if scaling > 1.0 else 1.0
+            y_scaling = 1.0/scaling if scaling <= 1.0 else 1.0
+            # Expand the box by a scaling factor
+            centre_x = (d.x1 + d.x2)/2.0
+            centre_y = (d.y1 + d.y2)/2.0
+            width = frame_size[0]
+            height = frame_size[1]
+            assert(centre_x >= 0 and centre_x < width)
+            assert(centre_y >= 0 and centre_y < height)
+            x1 = int(round(x_scaling * bounding_box_scaling_factor * (d.x1 - centre_x) + centre_x))
+            y1 = int(round(y_scaling * bounding_box_scaling_factor * (d.y1 - centre_y) + centre_y))
+            x2 = int(round(x_scaling * bounding_box_scaling_factor * (d.x2 - centre_x) + centre_x))
+            y2 = int(round(y_scaling * bounding_box_scaling_factor * (d.y2 - centre_y) + centre_y))
+            if x1 < 0 or y1 < 0 or x2 >= width or y2 >= height:
+                cnt_drop_because_bb_too_big += 1
+                drop_track = True
+                break
+            new_d = Detection((x1, y1, x2-x1, y2-y1), d.frame_number, interpolated=d.interpolated)
+            new_track.append(new_d)
+        if drop_track:
+            for d in track:
+                d.too_big = True
+        else:
+            expanded_tracks.append(new_track)
+    #valid_tracks = expanded_tracks
+
     # Do another run through the video, and colour the detections.
     # White for dropped detections, and other colours for tracks.
 
@@ -189,23 +255,51 @@ def process(f):
     coloured_tracks = zip(valid_tracks, cycle(colours))
 
     assert(frame_size is not None)
+    # Open the reader again
     cap = cv2.VideoCapture("/home/sandro/Documents/ECE496/gif-gan/data_collection/gifs/" + f + ".mp4")
+    # Open a writer for the debug video
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     out = cv2.VideoWriter(
         "/home/sandro/Documents/ECE496/gif-gan/data_collection/tracks_v1_interpolated/" + f + ".avi",
         fourcc, 25.0, frame_size)
+    # Open a writer for each track
+    writers = [cv2.VideoWriter("/home/sandro/Documents/ECE496/gif-gan/data_collection/crops/" + f + "_" + str(i) + ".avi",
+                               fourcc, 25.0, (target_width, target_height))
+               for i in range(len(expanded_tracks))]
+    # Make cursors for each track
+    cursors = [0 for _ in range(len(expanded_tracks))]
 
+    
     frame_number = 0
     while(cap.isOpened()):
         ret, im = cap.read()
         if not ret:
             break
-        
+
+        # # First create the crop frames
+        # for (w, (t, c)) in zip(writers, coloured_tracks):
+        #     for d in t:
+        #         #print "compare",d.frame_number,frame_number
+        #         if d.frame_number == frame_number:
+        #             #print "write"
+        #             w.write(get_crop(im, d, c))
+        #             break
+
+        # First create the crop frames
+        for i in range(len(expanded_tracks)):#(w, (t, c), cur) in zip(writers, coloured_tracks, cursors):
+            cur = cursors[i]
+            t = expanded_tracks[i]
+            w = writers[i]
+            if cur < len(t) and t[cur].frame_number == frame_number:
+                w.write(get_crop(im, t[cur]))
+                cursors[i] += 1
+
+        # Now create the debug video frame
         detections = detections_per_frame[frame_number]
         #print "at frame",frame_number,"got detections",detections
         frame_number += 1
-
         for d in detections:
+            #m_colour = np.array([255,255,255])
             # Make a white rectangle, assuming the detection is spurious
             cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), (0, 0, 0), 4)
             cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), (255, 255, 255), 2)
@@ -216,10 +310,37 @@ def process(f):
                     if d.interpolated:
                         cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), (255,255,255), 6)
                     cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), colour, 2)
+                    if d.too_big:
+                        cv2.line(im, (d.x1, d.y1), (d.x2, d.y2), colour, 2)
+                        cv2.line(im, (d.x1, d.y2), (d.x2, d.y1), colour, 2)
+                    #m_colour = colour
                     break
+
+            # for scale in [1.0, 1.3, 1.6, 1.9, 2.2, 2.5]:
+            #     # Expand the box along one axis so the aspect ratio is correct
+            #     required_aspect_ratio = float(target_width)/float(target_height)
+            #     actual_aspect_ratio = float(d.width)/float(d.height)
+            #     scaling = required_aspect_ratio / actual_aspect_ratio
+            #     x_scaling = scaling if scaling > 1.0 else 1.0
+            #     y_scaling = 1.0/scaling if scaling <= 1.0 else 1.0
+            #     # Expand the box by a scaling factor
+            #     centre_x = (d.x1 + d.x2)/2.0
+            #     centre_y = (d.y1 + d.y2)/2.0
+            #     x1 = int(round(x_scaling * scale * (d.x1 - centre_x) + centre_x))
+            #     y1 = int(round(y_scaling * scale * (d.y1 - centre_y) + centre_y))
+            #     x2 = int(round(x_scaling * scale * (d.x2 - centre_x) + centre_x))
+            #     y2 = int(round(y_scaling * scale * (d.y2 - centre_y) + centre_y))
+            #     new_d = Detection((x1, y1, x2-x1, y2-y1), 0)
+            #     cv2.rectangle(im, (new_d.x1, new_d.y1), (new_d.x2, new_d.y2), m_colour, 2)
+
 
         out.write(im)
     out.release()
+
+    # close the writers
+    for w in writers:
+        w.release()
+    
     print "done", f
 
 for f in ["iVy6Rgdog5oY", "jetOcz4pWPDck", "JhaOVn64HauaY", "JpA6974tuNRoA", "l41lRpI1ejISAVH0s", "L4vyAauJjxOlq", "lfrhq1753H0LC", "LGSc63wrKtKtG", "ml2Lm6lo5HSVy", "ndWC7pp2wKSWc", "NMH1ANukWHhZK", "ods8tx96CvuBG", "OLqdxkiQ3Q7Cw", "oQ7Kz58ZNpm6c", "oRp8OVyUcDBAI", "otfRWaEBmijv2", "pctqGv7NH8voA", "pruglIqg2Hsyc", "RMj1QZfa4JjZm", "SHFqtiEibgeo8", "TLs8z2Mn0RhOE", "U5MuZ4lELv0Eo", "U5poGkzMYOd7G", "UnpijzhwBafBe", "VqndyRC8rcWnS", "Vui3leSkFpkg8", "W1GXtbO5qAPhS", "WoaluZhDpz3zy", "x20dFskH5nwpW", "Xc4vTdVhgQ4ow", "XG1Iu0NH8VOHS", "XjEKa4BHjn7TW", "xnBhXMpDsQZ6o", "yLZwnMvQWqTkY", "10TeLEbt7fLndC", "11dgjtjk5zchRS", "11PSiVXyLMe1X2", "1241korwKdGMBa", "12zkbg2qEZb3Nu", "1403eCPKl5rrA4", "1CthgbtIOu0Du", "28z8pk38RfSY8", "3o7TKtZqP4MyMG5QC4", "3o85fPE3Irg8Wazl9S", "3rgXBPrh1KX3maLMYg", "5aIPErVMawv8Q", "5utwj4dIKEOk", "60CcjMxxCvq0g", "6iZgSVAGAmsbm", "6VhcRljpIT7A4", "6ZhO6QxQ4yqI0", "7MBQ8YA3Oxt3q", "7pKpsdWxPcAbm", "aVv2exYGNUwc8", "b4O5D4wspbBIc", "blMqtjunYqDm", "Bn3yWoKmd1B7O", "bYLvUDLqHPb7a", "CvnAPu8fAQgJq", "E3QcFMX4BQpQk", "FJE4sp5ezhPr2", "FsfczP3ESd5UA", "gCGnG3BLTwFgI"]:
