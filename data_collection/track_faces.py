@@ -1,3 +1,26 @@
+# NOTES TO SELF:
+# Probably want to turn up the jaccard index, there are a bunch of examples where we
+# artificially miss frames or split up what should be a single track because a detection
+# is deemed to be "too far away" from the previous one.
+# Maybe want to experiment with the other params as well? Missed frames? Minimum length?
+# Maybe add some new params?
+#  - min resolution
+#  - filter out blurry results?
+#  - filter out jumpy results?
+#  - I think you can adjust the confidence level of the face detector?
+#  - Maybe try some different face detectors?
+# Looks like we need to add stabilization. Thinking:
+#  - Do optical flow inside face bounding box between consecutive frames
+#  - From the point pairs, compute overall affine transform
+#  - Make new bounding box be a weighted average of the detector result and the optical
+#    flow result
+#  - Maybe throw away results where the optical flow and detector disagree too strongly?
+# Actually test counters are valid, lol
+# Cleanup notes:
+#  - Should do max_skip check at same point that we compute jaccard index
+#  - Should assign each detection in a track a colour, instead of doing n^2 search
+#  - Should split up into functions and things, lol
+
 import numpy as np
 import cv2
 import math
