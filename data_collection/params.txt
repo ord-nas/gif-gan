@@ -1,0 +1,44 @@
+track_v0 params:
+# Params for algorithm
+data_dir = "/home/sandro/opencv-3.1.0/opencv-3.1.0/data/"
+v = 'haarcascades/haarcascade_frontalface_alt2.xml'
+v = os.path.join(data_dir, v)
+cc = cv2.CascadeClassifier(v)
+flags = cv2.CASCADE_DO_CANNY_PRUNING
+min_jaccard = 0.80
+max_skip = 3
+min_frame_count = 20
+min_total_detections = 10
+colours = [
+    # in BGR space
+    np.array([0,0,255]), # red
+    np.array([0,255,0]), # green
+    np.array([255,0,0]), # blue
+    np.array([0,255,255]), # yellow
+    np.array([255,0,255]), # magenta
+    np.array([255,255,0]), # cyan
+]
+
+track_v1 params:
+data_dir = "/home/sandro/opencv-3.1.0/opencv-3.1.0/data/"
+v = 'haarcascades/haarcascade_frontalface_alt2.xml'
+v = os.path.join(data_dir, v)
+cc = cv2.CascadeClassifier(v)
+flags = cv2.CASCADE_DO_CANNY_PRUNING
+min_jaccard = 0.60
+max_skip = 6
+min_frame_count = 20
+min_total_detections = 10
+colours = [
+    # in BGR space
+    np.array([0,0,255]), # red
+    np.array([0,255,0]), # green
+    np.array([255,0,0]), # blue
+    np.array([0,255,255]), # yellow
+    np.array([255,0,255]), # magenta
+    np.array([255,255,0]), # cyan
+]
+# Pretty big for now so we can examine it
+target_width = 500
+target_height = 500
+bounding_box_scaling_factor = 1.0 # Iunno
