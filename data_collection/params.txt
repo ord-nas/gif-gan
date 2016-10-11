@@ -20,6 +20,7 @@ colours = [
 ]
 
 track_v1 params:
+# Params for algorithm
 data_dir = "/home/sandro/opencv-3.1.0/opencv-3.1.0/data/"
 v = 'haarcascades/haarcascade_frontalface_alt2.xml'
 v = os.path.join(data_dir, v)
