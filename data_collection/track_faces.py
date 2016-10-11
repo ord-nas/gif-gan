@@ -240,6 +240,7 @@ def process(f):
     for track in valid_tracks:
         drop_track = False
         new_track = []
+        print "track"
         for d in track:
             # Expand the box along one axis so the aspect ratio is correct
             required_aspect_ratio = float(target_width)/float(target_height)
@@ -263,13 +264,138 @@ def process(f):
                 drop_track = True
                 break
             new_d = Detection((x1, y1, x2-x1, y2-y1), d.frame_number, interpolated=d.interpolated)
+            print new_d.height, new_d.width
             new_track.append(new_d)
+        print "done track"
         if drop_track:
             for d in track:
                 d.too_big = True
         else:
             expanded_tracks.append(new_track)
     #valid_tracks = expanded_tracks
+
+    # # TEMP
+    # # Okay let's try to follow the face just using dense optical flow
+    # flow_tracks = []
+    # for track in valid_tracks:
+    #     cap = cv2.VideoCapture("/home/sandro/Documents/ECE496/gif-gan/data_collection/gifs/" + f + ".mp4")
+    #     new_track = []
+    #     d = Detection(track[0].as_vec(), track[0].frame_number, interpolated=track[0].interpolated)
+    #     new_track.append(d)
+    #     frame_number = d.frame_number
+    #     prev_frame = None
+    #     while(cap.isOpened()):
+    #         ret, im = cap.read()
+    #         if not ret:
+    #             break
+    #         im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+    #         if prev_frame is not None:
+    #             print "gray shape:",im.shape
+    #             prev_crop = prev_frame[d.y1:d.y2+1,d.x1:d.x2+1]
+    #             crop = im[d.y1:d.y2+1,d.x1:d.x2+1]
+    #             # flow = cv2.calcOpticalFlowFarneback(prev_crop, crop, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+    #             # print "flow shape:",flow.shape
+    #             # print "flow type:",flow.dtype
+    #             # shape = (1, flow.shape[0] * flow.shape[1], 2)
+    #             # source = np.zeros(shape, dtype=np.float32)
+    #             # target = np.zeros(shape, dtype=np.float32)
+    #             # for r in range(flow.shape[0]):
+    #             #     for c in range(flow.shape[1]):
+    #             #         source[0,c+r*flow.shape[1]] = [r, c]
+    #             #         target[0,c+r*flow.shape[1]] = [r, c] + flow[r,c]
+    #             source = prev_crop
+    #             target = crop
+    #             transformation = cv2.estimateRigidTransform(source, target, fullAffine=False)
+    #             m = transformation[:,:2]
+    #             b = transformation[:,2]
+    #             print "transform",transformation
+    #             new_d = Detection((0,0,0,0), frame_number+1)
+    #             x1y1 = m.dot(np.array([[d.x1],[d.y1]])) + b
+    #             new_d.x1 = x1y1[0,0]
+    #             new_d.y1 = x1y1[1,0]
+    #             x2y2 = m.dot(np.array([[d.x2],[d.y2]])) + b
+    #             new_d.x2 = x2y2[0,0]
+    #             new_d.y2 = x2y2[1,0]
+    #             d = new_d
+    #             print "new_d",d
+    #             if new_d.x1 < 0 or new_d.y1 < 0: break
+    #             detections_per_frame[frame_number].append(d)
+    #             new_track.append(d)
+    #             frame_number += 1
+    #         prev_frame = im
+    #     for d in new_track:
+    #         d.x1 = int(round(d.x1))
+    #         d.y1 = int(round(d.y1))
+    #         d.x2 = int(round(d.x2))
+    #         d.y2 = int(round(d.y2))
+    #     flow_tracks.append(new_track)
+    #         # shape = (1, 10, 2) # Needs to be a 3D array
+    #         # source = np.random.randint(0, 100, shape).astype(np.int)
+    #         # target = source + np.array([1, 0]).astype(np.int)
+    #         # transformation = cv2.estimateRigidTransform(source, target, False)
+    # valid_tracks.extend(flow_tracks)
+    # # END TEMP
+
+    # TEMP
+    # Okay let's try to follow the face just using sparse optical flow
+    feature_params = dict( maxCorners = 1000,
+                           qualityLevel = 0.01,
+                           minDistance = 8,
+                           blockSize = 19 )
+    lk_params = dict( winSize  = (19, 19),
+                      maxLevel = 2,
+                      criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+    flow_tracks = []
+    for track in valid_tracks:
+        cap = cv2.VideoCapture("/home/sandro/Documents/ECE496/gif-gan/data_collection/gifs/" + f + ".mp4")
+        new_track = []
+        d = Detection(track[0].as_vec(), track[0].frame_number, interpolated=track[0].interpolated)
+        new_track.append(d)
+        frame_number = d.frame_number
+        prev_frame = None
+        while(cap.isOpened()):
+            ret, im = cap.read()
+            if not ret:
+                break
+            im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+            if prev_frame is not None:
+                print "gray shape:",im.shape
+                prev_crop = prev_frame[d.y1:d.y2+1,d.x1:d.x2+1]
+                crop = im[d.y1:d.y2+1,d.x1:d.x2+1]
+                pnts = cv2.goodFeaturesToTrack(prev_crop, **feature_params)
+                #print "pnts",pnts
+                (pnts2, _, _) = cv2.calcOpticalFlowPyrLK(prev_crop, crop, pnts, None, **lk_params)
+                #print "pnts2",pnts2 
+                transformation = cv2.estimateRigidTransform(pnts,pnts2,fullAffine=False)
+                m = transformation[:,:2]
+                b = transformation[:,2]
+                print "transform",transformation
+                new_d = Detection((0,0,0,0), frame_number+1)
+                x1y1 = m.dot(np.array([[d.x1],[d.y1]])) + b
+                new_d.x1 = x1y1[0,0]
+                new_d.y1 = x1y1[1,0]
+                x2y2 = m.dot(np.array([[d.x2],[d.y2]])) + b
+                new_d.x2 = x2y2[0,0]
+                new_d.y2 = x2y2[1,0]
+                d = new_d
+                print "new_d",d
+                if new_d.x1 < 0 or new_d.y1 < 0: break
+                detections_per_frame[frame_number].append(d)
+                new_track.append(d)
+                frame_number += 1
+            prev_frame = im
+        for d in new_track:
+            d.x1 = int(round(d.x1))
+            d.y1 = int(round(d.y1))
+            d.x2 = int(round(d.x2))
+            d.y2 = int(round(d.y2))
+        flow_tracks.append(new_track)
+            # shape = (1, 10, 2) # Needs to be a 3D array
+            # source = np.random.randint(0, 100, shape).astype(np.int)
+            # target = source + np.array([1, 0]).astype(np.int)
+            # transformation = cv2.estimateRigidTransform(source, target, False)
+    valid_tracks.extend(flow_tracks)
+    # END TEMP
 
     # Do another run through the video, and colour the detections.
     # White for dropped detections, and other colours for tracks.
