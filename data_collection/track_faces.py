@@ -275,11 +275,6 @@ def process(f):
     #valid_tracks = expanded_tracks
 
     # # TEMP
-    # # TODO: pretty sure that two things are wrong:
-    # # 1) the way that points are fed into estimateRigidTransform ... looks like (y, x), should
-    # # probably be (x, y) to make the resulting transformation easier to reason about.
-    # # 2) the coordinate system. We are calculating the transform relative to the crop, but then
-    # # applying it relative to the entire image.
     # # Okay let's try to follow the face just using dense optical flow
     # flow_tracks = []
     # for track in valid_tracks:
@@ -306,8 +301,8 @@ def process(f):
     #             target = np.zeros(shape, dtype=np.float32)
     #             for r in range(flow.shape[0]):
     #                 for c in range(flow.shape[1]):
-    #                     source[0,c+r*flow.shape[1]] = [r, c]
-    #                     target[0,c+r*flow.shape[1]] = [r, c] + flow[r,c]
+    #                     source[0,c+r*flow.shape[1]] = [c + d.x1, r + d.y1]
+    #                     target[0,c+r*flow.shape[1]] = [c + d.x1 + flow[r,c][0], r + d.y1 + flow[r,c][1]]
     #             # source = prev_crop
     #             # target = crop
     #             transformation = cv2.estimateRigidTransform(source, target, fullAffine=False)
@@ -370,13 +365,27 @@ def process(f):
                 pnts = cv2.goodFeaturesToTrack(prev_crop, **feature_params)
                 #print "before",pnts
                 #print "after",pnts
-                (pnts2, _, status) = cv2.calcOpticalFlowPyrLK(prev_crop, crop, pnts, None, **lk_params)
-                #print "pnts2",pnts2
+                (pnts2, status, _) = cv2.calcOpticalFlowPyrLK(prev_crop, crop, pnts, None, **lk_params)
+                print "pnts",pnts
+                print "pnts2",pnts2
+                print "status",status
                 pnts = [p for (p, s) in zip(pnts, status) if s]
                 pnts2 = [p for (p, s) in zip(pnts2, status) if s]
+                if len(pnts) == 0 or len(pnts2) == 0:
+                    print "Oh Noes!"
+                    print "pnts",pnts
+                    print "pnts2",pnts2
+                    cv2.imwrite("/home/sandro/Documents/ECE496/gif-gan/data_collection/tmp_crop.png", crop)
+                    cv2.imwrite("/home/sandro/Documents/ECE496/gif-gan/data_collection/tmp_prev_crop.png", prev_crop)
+                    raise Exception("Couldn't find tracking points")
                 pnts += np.array([d.x1,d.y1])
                 pnts2 += np.array([d.x1,d.y1])
                 transformation = cv2.estimateRigidTransform(pnts,pnts2,fullAffine=False)
+                if transformation is None:
+                    print "Oh Noes!"
+                    print "pnts",pnts
+                    print "pnts2",pnts2
+                    raise Exception("Couldn't find transformation")
                 m = transformation[:,:2]
                 b = transformation[:,2:3]
                 print "b",b

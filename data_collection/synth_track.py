@@ -19,7 +19,7 @@ lk_params = dict( winSize  = (19, 19),
 def do_sparse_tracking(prev_crop, crop, rwindow):
     (rx1, ry1, rx2, ry2) = rwindow
     pnts = cv2.goodFeaturesToTrack(prev_crop, **feature_params)
-    (pnts2, _, status) = cv2.calcOpticalFlowPyrLK(prev_crop, crop, pnts, None, **lk_params)
+    (pnts2, status, _) = cv2.calcOpticalFlowPyrLK(prev_crop, crop, pnts, None, **lk_params)
     pnts = [p for (p, s) in zip(pnts, status) if s]
     pnts2 = [p for (p, s) in zip(pnts2, status) if s]
     pnts += np.array([rx1,ry1])
