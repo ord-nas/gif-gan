@@ -366,9 +366,9 @@ def process(f):
                 #print "before",pnts
                 #print "after",pnts
                 (pnts2, status, _) = cv2.calcOpticalFlowPyrLK(prev_crop, crop, pnts, None, **lk_params)
-                print "pnts",pnts
-                print "pnts2",pnts2
-                print "status",status
+                #print "pnts",pnts
+                #print "pnts2",pnts2
+                #print "status",status
                 pnts = [p for (p, s) in zip(pnts, status) if s]
                 pnts2 = [p for (p, s) in zip(pnts2, status) if s]
                 if len(pnts) == 0 or len(pnts2) == 0:
@@ -388,15 +388,27 @@ def process(f):
                     raise Exception("Couldn't find transformation")
                 m = transformation[:,:2]
                 b = transformation[:,2:3]
-                print "b",b
+                #print "b",b
                 print "transform",transformation
                 new_d = Detection((0,0,0,0), frame_number+1)
+                # Kill the rotation, extract just the scale and offset
                 x1y1 = m.dot(np.array([[d.x1],[d.y1]])) + b
-                new_d.x1 = x1y1[0,0]
-                new_d.y1 = x1y1[1,0]
                 x2y2 = m.dot(np.array([[d.x2],[d.y2]])) + b
-                new_d.x2 = x2y2[0,0]
-                new_d.y2 = x2y2[1,0]
+                centre = (x1y1 + x2y2) / 2.0
+                diag = (x1y1 - x2y2)
+                diag_len = math.sqrt(diag[0,0]**2 + diag[1,0]**2)
+                old_diag_len = math.sqrt((d.x2-d.x1)**2 + (d.y2-d.y1)**2)
+                scale = diag_len / old_diag_len
+                new_d.x1 = centre[0,0] - scale*(d.x2-d.x1)/2.0
+                new_d.x2 = centre[0,0] + scale*(d.x2-d.x1)/2.0
+                new_d.y1 = centre[1,0] - scale*(d.y2-d.y1)/2.0
+                new_d.y2 = centre[1,0] + scale*(d.y2-d.y1)/2.0
+                # x1y1 = m.dot(np.array([[d.x1],[d.y1]])) + b
+                # new_d.x1 = x1y1[0,0]
+                # new_d.y1 = x1y1[1,0]
+                # x2y2 = m.dot(np.array([[d.x2],[d.y2]])) + b
+                # new_d.x2 = x2y2[0,0]
+                # new_d.y2 = x2y2[1,0]
                 d = new_d
                 print "new_d",d
                 if new_d.x1 < 0 or new_d.y1 < 0: break
@@ -405,10 +417,12 @@ def process(f):
                 frame_number += 1
             prev_frame = im
         for d in new_track:
+            #print "aspect ratio (before):", float(d.x2-d.x1) / float(d.y2 - d.y1)
             d.x1 = int(round(d.x1))
             d.y1 = int(round(d.y1))
             d.x2 = int(round(d.x2))
             d.y2 = int(round(d.y2))
+            #print "aspect ratio (after):", float(d.x2-d.x1) / float(d.y2 - d.y1)
         flow_tracks.append(new_track)
             # shape = (1, 10, 2) # Needs to be a 3D array
             # source = np.random.randint(0, 100, shape).astype(np.int)
