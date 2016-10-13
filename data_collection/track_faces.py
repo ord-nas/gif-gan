@@ -275,6 +275,11 @@ def process(f):
     #valid_tracks = expanded_tracks
 
     # # TEMP
+    # # TODO: pretty sure that two things are wrong:
+    # # 1) the way that points are fed into estimateRigidTransform ... looks like (y, x), should
+    # # probably be (x, y) to make the resulting transformation easier to reason about.
+    # # 2) the coordinate system. We are calculating the transform relative to the crop, but then
+    # # applying it relative to the entire image.
     # # Okay let's try to follow the face just using dense optical flow
     # flow_tracks = []
     # for track in valid_tracks:
@@ -293,18 +298,18 @@ def process(f):
     #             print "gray shape:",im.shape
     #             prev_crop = prev_frame[d.y1:d.y2+1,d.x1:d.x2+1]
     #             crop = im[d.y1:d.y2+1,d.x1:d.x2+1]
-    #             # flow = cv2.calcOpticalFlowFarneback(prev_crop, crop, None, 0.5, 3, 15, 3, 5, 1.2, 0)
-    #             # print "flow shape:",flow.shape
-    #             # print "flow type:",flow.dtype
-    #             # shape = (1, flow.shape[0] * flow.shape[1], 2)
-    #             # source = np.zeros(shape, dtype=np.float32)
-    #             # target = np.zeros(shape, dtype=np.float32)
-    #             # for r in range(flow.shape[0]):
-    #             #     for c in range(flow.shape[1]):
-    #             #         source[0,c+r*flow.shape[1]] = [r, c]
-    #             #         target[0,c+r*flow.shape[1]] = [r, c] + flow[r,c]
-    #             source = prev_crop
-    #             target = crop
+    #             flow = cv2.calcOpticalFlowFarneback(prev_crop, crop, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+    #             print "flow shape:",flow.shape
+    #             print "flow type:",flow.dtype
+    #             shape = (1, flow.shape[0] * flow.shape[1], 2)
+    #             source = np.zeros(shape, dtype=np.float32)
+    #             target = np.zeros(shape, dtype=np.float32)
+    #             for r in range(flow.shape[0]):
+    #                 for c in range(flow.shape[1]):
+    #                     source[0,c+r*flow.shape[1]] = [r, c]
+    #                     target[0,c+r*flow.shape[1]] = [r, c] + flow[r,c]
+    #             # source = prev_crop
+    #             # target = crop
     #             transformation = cv2.estimateRigidTransform(source, target, fullAffine=False)
     #             m = transformation[:,:2]
     #             b = transformation[:,2]
@@ -341,7 +346,7 @@ def process(f):
     feature_params = dict( maxCorners = 1000,
                            qualityLevel = 0.01,
                            minDistance = 8,
-                           blockSize = 19 )
+                           blockSize = 10 ) # originally 19
     lk_params = dict( winSize  = (19, 19),
                       maxLevel = 2,
                       criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
@@ -363,12 +368,18 @@ def process(f):
                 prev_crop = prev_frame[d.y1:d.y2+1,d.x1:d.x2+1]
                 crop = im[d.y1:d.y2+1,d.x1:d.x2+1]
                 pnts = cv2.goodFeaturesToTrack(prev_crop, **feature_params)
-                #print "pnts",pnts
-                (pnts2, _, _) = cv2.calcOpticalFlowPyrLK(prev_crop, crop, pnts, None, **lk_params)
-                #print "pnts2",pnts2 
+                #print "before",pnts
+                #print "after",pnts
+                (pnts2, _, status) = cv2.calcOpticalFlowPyrLK(prev_crop, crop, pnts, None, **lk_params)
+                #print "pnts2",pnts2
+                pnts = [p for (p, s) in zip(pnts, status) if s]
+                pnts2 = [p for (p, s) in zip(pnts2, status) if s]
+                pnts += np.array([d.x1,d.y1])
+                pnts2 += np.array([d.x1,d.y1])
                 transformation = cv2.estimateRigidTransform(pnts,pnts2,fullAffine=False)
                 m = transformation[:,:2]
-                b = transformation[:,2]
+                b = transformation[:,2:3]
+                print "b",b
                 print "transform",transformation
                 new_d = Detection((0,0,0,0), frame_number+1)
                 x1y1 = m.dot(np.array([[d.x1],[d.y1]])) + b
