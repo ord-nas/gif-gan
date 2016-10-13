@@ -16,6 +16,31 @@ lk_params = dict( winSize  = (19, 19),
                   maxLevel = 2,
                   criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
 
+def do_sparse_tracking(prev_crop, crop, rwindow):
+    (rx1, ry1, rx2, ry2) = rwindow
+    pnts = cv2.goodFeaturesToTrack(prev_crop, **feature_params)
+    (pnts2, _, status) = cv2.calcOpticalFlowPyrLK(prev_crop, crop, pnts, None, **lk_params)
+    pnts = [p for (p, s) in zip(pnts, status) if s]
+    pnts2 = [p for (p, s) in zip(pnts2, status) if s]
+    pnts += np.array([rx1,ry1])
+    pnts2 += np.array([rx1,ry1])
+    transformation = cv2.estimateRigidTransform(pnts,pnts2,fullAffine=False)
+    return (pnts, pnts2, transformation)
+
+def do_dense_tracking(prev_crop, crop, rwindow):
+    (rx1, ry1, rx2, ry2) = rwindow
+    flow = cv2.calcOpticalFlowFarneback(prev_crop, crop, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+    shape = (1, flow.shape[0] * flow.shape[1], 2)
+    source = np.zeros(shape, dtype=np.float32)
+    target = np.zeros(shape, dtype=np.float32)
+    for r in range(flow.shape[0]):
+        for c in range(flow.shape[1]):
+            source[0,c+r*flow.shape[1]] = [c + rx1, r + ry1]
+            target[0,c+r*flow.shape[1]] = [c + rx1 + flow[r,c][0], r + ry1 + flow[r,c][1]]
+    transformation = cv2.estimateRigidTransform(source[:,::3], target[:,::3], fullAffine=False)
+    skip = 100
+    return (source[0,::skip,np.newaxis], target[0,::skip,np.newaxis], transformation)
+
 cap = cv2.VideoCapture(input_file)
 fourcc = cv2.VideoWriter_fourcc(*'XVID')
 out = None
@@ -36,13 +61,8 @@ while cap.isOpened():
         (rx1, ry1, rx2, ry2) = (int(round(x1)), int(round(y1)), int(round(x2)), int(round(y2)))
         prev_crop = prev_im[ry1:ry2+1,rx1:rx2+1]
         crop = im[ry1:ry2+1,rx1:rx2+1]
-        pnts = cv2.goodFeaturesToTrack(prev_crop, **feature_params)
-        (pnts2, _, status) = cv2.calcOpticalFlowPyrLK(prev_crop, crop, pnts, None, **lk_params)
-        pnts = [p for (p, s) in zip(pnts, status) if s]
-        pnts2 = [p for (p, s) in zip(pnts2, status) if s]
-        pnts += np.array([rx1,ry1])
-        pnts2 += np.array([rx1,ry1])
-        transformation = cv2.estimateRigidTransform(pnts,pnts2,fullAffine=False)
+        pnts, pnts2, transformation = do_sparse_tracking(prev_crop, crop, (rx1, ry1, rx2, ry2))
+        #pnts, pnts2, transformation = do_dense_tracking(prev_crop, crop, (rx1, ry1, rx2, ry2))
         if transformation is None:
             print "OH NOES!"
             print "pnts", pnts
