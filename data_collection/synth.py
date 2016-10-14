@@ -6,7 +6,7 @@ import os
 from itertools import cycle
 
 initial_face_file = "/home/sandro/Documents/ECE496/gif-gan/data_collection/crops/FsfczP3ESd5UA_0.avi"
-output_file = "/home/sandro/Documents/ECE496/gif-gan/data_collection/synth.avi"
+output_file = "/home/sandro/Documents/ECE496/gif-gan/data_collection/synth.mp4"
 
 def make_path(key_points, num_steps):
     assert(len(key_points) > 0)
@@ -26,7 +26,7 @@ ret, face = cap.read()
 assert(ret)
 face = cv2.resize(face, (100,100), interpolation = cv2.INTER_LINEAR)
 
-fourcc = cv2.VideoWriter_fourcc(*'XVID')
+fourcc = cv2.VideoWriter_fourcc(*'H264')
 frame_size = (500, 500) # width, height
 out = cv2.VideoWriter(output_file, fourcc, 25.0, frame_size)
 key_points = [(100,100), (300,100), (100,300), (300,300)]
