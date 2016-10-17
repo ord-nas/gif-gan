@@ -5,6 +5,7 @@ import os
 import datetime
 import threading
 import argparse
+import time
 
 giphy_api = "http://api.giphy.com/v1/gifs/random?api_key=dc6zaTOxFJmzC"
 
@@ -55,7 +56,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--path", type=str, help="Destination path for storing downloaded gifs. Default to \"./gifs_raw/\".", default = "./gifs_raw/")
 parser.add_argument("--num_threads", type=int, help="Number of threads to run. Default to 50.", default = 50)
 parser.add_argument("--num_items_per_thread", type=int, help="Number of times (gif or mp4) to be downloaded per thread. Default to 10.", default = 10)
-parser.add_argument("--mode", type=str, help="\"gif\" or \"mp4\". Default to gif.", default = "gif")
+parser.add_argument("--mode", type=str, help="\"gif\" or \"mp4\". Default to mp4.", default = "mp4")
 args = parser.parse_args()
 
 path = args.path
@@ -71,6 +72,7 @@ for t in range(args.num_threads):
     thread = myThread(t, args.num_items_per_thread)
     thread.start()
     thread_list.append(thread)
+    time.sleep(0.5)
     
     
     
