@@ -14,7 +14,9 @@ def git_gifs(threadID, num_gifs):
     global path
     global mode
 
-    for i in range(num_gifs):
+    i = 0
+    failed_counter = 0
+    while(i < num_gifs and failed_counter < 20):
         try:
             # query random gif/mp4, obtain url
             response = urllib2.urlopen(giphy_api)
@@ -35,8 +37,11 @@ def git_gifs(threadID, num_gifs):
             # retrieve gif/mp4 from query response
             urllib.urlretrieve(gif_url, file_path)
             print "\"" + gif_url +"\" saved to " + file_path
+            i += 1
+            failed_counter = 0
         except:
             print "No url found from server response. Continue..."
+            failed_counter += 1
 
 
 class myThread(threading.Thread):
