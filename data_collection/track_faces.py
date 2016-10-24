@@ -129,6 +129,18 @@ def get_crop(im, d):
     #return (np.ones([target_height, target_width, 3]) * c).astype('uint8')
     return res
 
+def same_size_crop(inpt, target):
+    inpt_x = int(round((inpt.x1 + inpt.x2) / 2.0))
+    inpt_y = int(round((inpt.y1 + inpt.y2) / 2.0))
+    target_x = int(round((target.x1 + target.x2) / 2.0))
+    target_y = int(round((target.y1 + target.y2) / 2.0))
+    new = Detection((0,0,0,0), inpt.frame_number, inpt.interpolated)
+    new.x1 = target.x1 - target_x + inpt_x
+    new.y1 = target.y1 - target_y + inpt_y
+    new.x2 = target.x2 - target_x + inpt_x
+    new.y2 = target.y2 - target_y + inpt_y
+    return new
+
 def process(f):
     global cnt_drop_because_low_total_detections
     global cnt_drop_because_low_frame_count
@@ -360,8 +372,9 @@ def process(f):
             im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
             if prev_frame is not None:
                 print "gray shape:",im.shape
-                prev_crop = prev_frame[d.y1:d.y2+1,d.x1:d.x2+1]
-                crop = im[d.y1:d.y2+1,d.x1:d.x2+1]
+                prev_crop = prev_frame[d.y1:d.y2+1,d.x1:d.x2+1]#prev_frame[d.y1:d.y2+1,d.x1:d.x2+1]
+                next_d = same_size_crop(track[len(new_track)], d)
+                crop = im[next_d.y1:next_d.y2+1,next_d.x1:next_d.x2+1]#im[d.y1:d.y2+1,d.x1:d.x2+1]
                 pnts = cv2.goodFeaturesToTrack(prev_crop, **feature_params)
                 #print "before",pnts
                 #print "after",pnts
@@ -379,7 +392,7 @@ def process(f):
                     cv2.imwrite("/home/sandro/Documents/ECE496/gif-gan/data_collection/tmp_prev_crop.png", prev_crop)
                     raise Exception("Couldn't find tracking points")
                 pnts += np.array([d.x1,d.y1])
-                pnts2 += np.array([d.x1,d.y1])
+                pnts2 += np.array([next_d.x1,next_d.y1])
                 transformation = cv2.estimateRigidTransform(pnts,pnts2,fullAffine=False)
                 if transformation is None:
                     print "Oh Noes!"
@@ -412,6 +425,7 @@ def process(f):
                 d = new_d
                 print "new_d",d
                 if new_d.x1 < 0 or new_d.y1 < 0: break
+                if new_d.x2 >= frame_size[0] or new_d.y2 >= frame_size[1]: break
                 detections_per_frame[frame_number].append(d)
                 new_track.append(d)
                 frame_number += 1
@@ -448,9 +462,9 @@ def process(f):
     # Open a writer for each track
     writers = [cv2.VideoWriter("/home/sandro/Documents/ECE496/gif-gan/data_collection/crops/" + f + "_" + str(i) + ".avi",
                                fourcc, 25.0, (target_width, target_height))
-               for i in range(len(expanded_tracks))]
+               for i in range(len(flow_tracks))]
     # Make cursors for each track
-    cursors = [0 for _ in range(len(expanded_tracks))]
+    cursors = [0 for _ in range(len(flow_tracks))]
 
     
     frame_number = 0
@@ -469,9 +483,9 @@ def process(f):
         #             break
 
         # First create the crop frames
-        for i in range(len(expanded_tracks)):#(w, (t, c), cur) in zip(writers, coloured_tracks, cursors):
+        for i in range(len(flow_tracks)):#(w, (t, c), cur) in zip(writers, coloured_tracks, cursors):
             cur = cursors[i]
-            t = expanded_tracks[i]
+            t = flow_tracks[i]
             w = writers[i]
             if cur < len(t) and t[cur].frame_number == frame_number:
                 w.write(get_crop(im, t[cur]))
