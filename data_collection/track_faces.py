@@ -20,6 +20,9 @@
 #  - Should do max_skip check at same point that we compute jaccard index
 #  - Should assign each detection in a track a colour, instead of doing n^2 search
 #  - Should split up into functions and things, lol
+# TODO: TRY SETTING FEATURE TRACK BLOCK SIZE BACK TO 19 TO MATCH OPTICAL FLOW SETTING
+# TODO: Should we add some kind of safeguard if the stabilized bbox drifts too
+# far from the original bbox? And just throw it out in that case?
 
 import numpy as np
 import cv2
@@ -27,6 +30,8 @@ import math
 import sys
 import os
 from itertools import cycle
+import argparse
+import copy
 
 def jaccard_index(a, b):
     intersection_width = min(a.x2, b.x2) - max(a.x1, b.x1)
@@ -44,7 +49,7 @@ def jaccard_index(a, b):
 def inc(hist, key):
     hist[key] = hist.get(key, 0) + 1
 
-    
+
 class Detection:
     def __repr__(self):
         return "(%d: <(%d, %d), (%d, %d)>)" % (
@@ -72,16 +77,57 @@ class Detection:
         return np.array([self.x1, self.y1, self.width, self.height])
 
 
+# Basically just a struct binding together a bunch of outputs
+class Output:
+    def __init__(self):
+        # Drop counters (in priority order, higher to lower)
+        self.cnt_drop_because_low_frame_count = 0
+        self.cnt_drop_because_low_total_detections = 0
+        self.cnt_drop_because_expanded_bb_too_big = 0
+        self.cnt_drop_because_optical_flow_bb_too_big = 0
+        self.cnt_drop_because_stabilized_bb_too_big = 0
+        self.cnt_drop_because_no_feature_points = 0
+        self.cnt_drop_because_failed_optical_flow = 0
+        self.cnt_drop_because_no_rigid_transform = 0
+
+        # Histograms
+        self.hst_frame_count = {}
+        self.hst_total_detections = {}
+        self.hst_skip = {}
+        self.hst_jaccard = {}
+
 # Params for algorithm
-data_dir = "/home/sandro/opencv-3.1.0/opencv-3.1.0/data/"
-v = 'haarcascades/haarcascade_frontalface_alt2.xml'
-v = os.path.join(data_dir, v)
-cc = cv2.CascadeClassifier(v)
-flags = cv2.CASCADE_DO_CANNY_PRUNING
-min_jaccard = 0.60
-max_skip = 6
-min_frame_count = 20
-min_total_detections = 10
+parser = argparse.ArgumentParser()
+# Params for the Haar Cascade Classifier
+parser.add_argument("--opencv_data_dir", default="/home/sandro/opencv-3.1.0/opencv-3.1.0/data/", help="Directory from which to load classifier config file")
+parser.add_argument("--classifier_config_file", default="haarcascades/haarcascade_frontalface_alt2.xml", help="Classifier config file")
+parser.add_argument("--classifier_scale_factor", type=float, default=1.1, help="cc.detectMultiScale(scaleFactor)")
+parser.add_argument("--classifier_min_neighbors", type=int, default=4, help="cc.detectMultiScale(minNeighbors)")
+parser.add_argument("--classifier_min_size_factor", type=float, default=1/20.0, help="Multiplier on image side length to determine cc.detectMultiScale(minSize)")
+parser.add_argument("--classifier_max_size_factor", type=float, default=1/2.0, help="Multiplier on image side length to determine cc.detectMultiScale(maxSize)")
+parser.add_argument("--classifier_flags", type=int, default=cv2.CASCADE_DO_CANNY_PRUNING, help="cc.detectMultiScale(flags)")
+# Params for determining how to stitch frames together
+parser.add_argument("--min_jaccard", type=float, default=0.60, help="Minimum jaccard index between adjacent bounding boxes in a track")
+parser.add_argument("--max_skip", type=int, default=6, help="Maximium number of consecutive missing detections in a track")
+parser.add_argument("--min_frame_count", type=int, default=20, help="Minimum number of consecutive frames required to form a track")
+parser.add_argument("--min_total_detections", type=int, default=10, help="Minimum number of total detections in a track")
+# Params for determining how to size the bounding box around the face
+parser.add_argument("--target_width", type=int, default=500, help="Width of the cropped face video")
+parser.add_argument("--target_height", type=int, default=500, help="Height of the cropped face video")
+parser.add_argument("--bounding_box_scaling_factor", type=float, default=1.0, help="Amount to scale the haar cascade bounding box before cropping")
+# Params for determining how statistics are collected
+parser.add_argument("--hst_jaccard_bin_size", type=float, default=0.01, help="Size of a bin in the jaccard index histogram")
+# Params for stabilization - finding features
+parser.add_argument("--feature_track_max_corners", type=int, default=1000, help="cv2.goodFeaturesToTrack(maxCorners)")
+parser.add_argument("--feature_track_quality_level", type=float, default=0.01, help="cv2.goodFeaturesToTrack(qualityLevel)")
+parser.add_argument("--feature_track_min_distance", type=int, default=8, help="cv2.goodFeaturesToTrack(minDistance)")
+parser.add_argument("--feature_track_block_size", type=int, default=10, help="cv2.goodFeaturesToTrack(blockSize)") # Originally 19
+# Params for stabilization - sparse optical flow
+parser.add_argument("--optical_flow_win_size", type=int, default=19, help="Used to determine cv2.calcOpticalFlowPyrLK(winSize)")
+parser.add_argument("--optical_flow_max_level", type=int, default=2, help="cv2.calcOpticalFlowPyrLK(maxLevel)")
+# Yeah, yeah, I know, "eval is evil". Well suck it, cause I don't care. 
+parser.add_argument("--optical_flow_criteria", type=eval, default=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03), help="cv2.calcOpticalFlowPyrLK(criteria)")
+
 colours = [
     # in BGR space
     np.array([0,0,255]), # red
@@ -91,22 +137,7 @@ colours = [
     np.array([255,0,255]), # magenta
     np.array([255,255,0]), # cyan
 ]
-# Pretty big for now so we can examine it
-target_width = 500
-target_height = 500
-bounding_box_scaling_factor = 1.0 # Iunno
 
-# Drop counters (in priority order, higher to lower)
-cnt_drop_because_low_frame_count = 0
-cnt_drop_because_low_total_detections = 0
-cnt_drop_because_bb_too_big = 0
-
-# Histograms
-hst_frame_count = {}
-hst_total_detections = {}
-hst_skip = {}
-hst_jaccard = {}
-hst_jaccard_bin_size = 0.01
 
 def get_crop(im, d):
     # # Expand the box along one axis so the aspect ratio is correct
@@ -125,16 +156,23 @@ def get_crop(im, d):
     # pass
     # Methods are cv2.INTER_CUBIC (slow) and cv2.INTER_LINEAR (fast but worse)
     crop = im[d.y1:d.y2+1,d.x1:d.x2+1]
-    res = cv2.resize(crop,(target_width,target_height), interpolation = cv2.INTER_LINEAR)
+    res = cv2.resize(crop,(args.target_width,args.target_height), interpolation = cv2.INTER_LINEAR)
     #return (np.ones([target_height, target_width, 3]) * c).astype('uint8')
     return res
 
+# Arguments:
+#  - inpt, detection to resize
+#  - target, detection from which to copy size
+# Returns:
+#  - resized detection
 def same_size_crop(inpt, target):
+    # Resize from the centre. First find the centre of both detections.
     inpt_x = int(round((inpt.x1 + inpt.x2) / 2.0))
     inpt_y = int(round((inpt.y1 + inpt.y2) / 2.0))
     target_x = int(round((target.x1 + target.x2) / 2.0))
     target_y = int(round((target.y1 + target.y2) / 2.0))
-    new = Detection((0,0,0,0), inpt.frame_number, inpt.interpolated)
+    # Copy inpt and then resize it
+    new = copy.copy(inpt)
     new.x1 = target.x1 - target_x + inpt_x
     new.y1 = target.y1 - target_y + inpt_y
     new.x2 = target.x2 - target_x + inpt_x
@@ -144,7 +182,7 @@ def same_size_crop(inpt, target):
 def process(f):
     global cnt_drop_because_low_total_detections
     global cnt_drop_because_low_frame_count
-    global cnt_drop_because_bb_too_big
+    global cnt_drop_because_expanded_bb_too_big
     # Temp
     global coloured_tracks
     global detections_per_frame
@@ -167,10 +205,12 @@ def process(f):
             frame_size = (im.shape[1], im.shape[0])
 
         side = math.sqrt(im.size)
-        minlen = int(side / 20)
-        maxlen = int(side / 2)
+        minlen = int(side * args.classifier_min_scale_factor)
+        maxlen = int(side * args.classifier_max_scale_factor)
 
-        features = cc.detectMultiScale(im, 1.1, 4, flags, (minlen, minlen), (maxlen, maxlen))
+        features = cc.detectMultiScale(
+            im, args.classifier_scale_factor, args.classifier_min_neighbors,
+            args.classifier_flags, (minlen, minlen), (maxlen, maxlen))
         current_detections = [Detection(rect, frame_number) for rect in features]
         detections_per_frame.append(current_detections)
         current_detections = set(current_detections)
@@ -180,7 +220,7 @@ def process(f):
             for track in tracks:
                 previous = track[-1]
                 j = jaccard_index(current, previous)
-                if j >= min_jaccard:
+                if j >= args.min_jaccard:
                     scored_matches.append( (j, (current, track)) )
         scored_matches.sort(reverse=True)
         #print scored_matches
@@ -190,13 +230,13 @@ def process(f):
                 continue
             skip = frame_number - track[-1].frame_number - 1
             #print "track",track,"skip", skip
-            if skip <= max_skip:
+            if skip <= args.max_skip:
                 #print "assigned",current,"to",track
                 track.append(current)
                 current_detections.remove(current)
                 # Update histograms
                 inc(hst_skip, skip)
-                jaccard_bin = round(j / hst_jaccard_bin_size) * hst_jaccard_bin_size
+                jaccard_bin = round(j / args.hst_jaccard_bin_size) * args.hst_jaccard_bin_size
                 inc(hst_jaccard, jaccard_bin)
 
         # Everything that wasn't paired becomes a new track
@@ -214,12 +254,12 @@ def process(f):
     for track in tracks:
         # Drop track if invalid
         frame_count = track[-1].frame_number - track[0].frame_number + 1
-        if frame_count < min_frame_count:
+        if frame_count < args.min_frame_count:
             #print "dropped track because frame count! Was",frame_count,"not",min_frame_count
             cnt_drop_because_low_frame_count += 1
             continue
         num_detections = len(track)
-        if num_detections < min_total_detections:
+        if num_detections < args.min_total_detections:
             #print "dropped track because total detections! Was",num_detections,"not",min_total_detections
             cnt_drop_because_low_total_detections += 1
             continue
@@ -255,7 +295,7 @@ def process(f):
         print "track"
         for d in track:
             # Expand the box along one axis so the aspect ratio is correct
-            required_aspect_ratio = float(target_width)/float(target_height)
+            required_aspect_ratio = float(args.target_width)/float(args.target_height)
             actual_aspect_ratio = float(d.width)/float(d.height)
             scaling = required_aspect_ratio / actual_aspect_ratio
             x_scaling = scaling if scaling > 1.0 else 1.0
@@ -267,12 +307,12 @@ def process(f):
             height = frame_size[1]
             assert(centre_x >= 0 and centre_x < width)
             assert(centre_y >= 0 and centre_y < height)
-            x1 = int(round(x_scaling * bounding_box_scaling_factor * (d.x1 - centre_x) + centre_x))
-            y1 = int(round(y_scaling * bounding_box_scaling_factor * (d.y1 - centre_y) + centre_y))
-            x2 = int(round(x_scaling * bounding_box_scaling_factor * (d.x2 - centre_x) + centre_x))
-            y2 = int(round(y_scaling * bounding_box_scaling_factor * (d.y2 - centre_y) + centre_y))
+            x1 = int(round(x_scaling * args.bounding_box_scaling_factor * (d.x1 - centre_x) + centre_x))
+            y1 = int(round(y_scaling * args.bounding_box_scaling_factor * (d.y1 - centre_y) + centre_y))
+            x2 = int(round(x_scaling * args.bounding_box_scaling_factor * (d.x2 - centre_x) + centre_x))
+            y2 = int(round(y_scaling * args.bounding_box_scaling_factor * (d.y2 - centre_y) + centre_y))
             if x1 < 0 or y1 < 0 or x2 >= width or y2 >= height:
-                cnt_drop_because_bb_too_big += 1
+                cnt_drop_because_expanded_bb_too_big += 1
                 drop_track = True
                 break
             new_d = Detection((x1, y1, x2-x1, y2-y1), d.frame_number, interpolated=d.interpolated)
@@ -461,7 +501,7 @@ def process(f):
         fourcc, 25.0, frame_size)
     # Open a writer for each track
     writers = [cv2.VideoWriter("/home/sandro/Documents/ECE496/gif-gan/data_collection/crops/" + f + "_" + str(i) + ".avi",
-                               fourcc, 25.0, (target_width, target_height))
+                               fourcc, 25.0, (args.target_width, args.target_height))
                for i in range(len(flow_tracks))]
     # Make cursors for each track
     cursors = [0 for _ in range(len(flow_tracks))]
@@ -540,6 +580,362 @@ def process(f):
     
     print "done", f
 
+
+# Arguments:
+#  - cap, opencv reader
+#  - args, command line params
+#  - output, object to stuff statistics and other side outputs into
+# Returns:
+#  - initial_tracks, a list of lists of Detection objects
+#  - frame_size, the (width, height) of the frames in f
+def get_initial_tracks(cap, args, output):
+    # Intiialize the classifier
+    config = os.path.join(args.opencv_data_dir, args.classifier_config_file)
+    cc = cv2.CascadeClassifier(config)
+
+    tracks = []
+    frame_number = 0
+    frame_size = None
+    # Iterate over the frames
+    while(cap.isOpened()):
+        ret, im = cap.read()
+        if not ret:
+            break
+        if not frame_size:
+            frame_size = (im.shape[1], im.shape[0])
+
+        # Get face detections on this frame
+        side = math.sqrt(im.size)
+        minlen = int(side * args.classifier_min_scale_factor)
+        maxlen = int(side * args.classifier_max_scale_factor)
+        features = cc.detectMultiScale(
+            im, args.classifier_scale_factor, args.classifier_min_neighbors,
+            args.classifier_flags, (minlen, minlen), (maxlen, maxlen))
+        current_detections = [Detection(rect, frame_number) for rect in features]
+        current_detections = set(current_detections)
+
+        # Score how much each detection overlaps with previous tracks
+        scored_matches = []
+        for current in current_detections:
+            for track in tracks:
+                previous = track[-1]
+                j = jaccard_index(current, previous)
+                skip = frame_number - previous.frame_number - 1
+                if j >= args.min_jaccard and skip <= args.max_skip:
+                    scored_matches.append( (j, (current, track, skip)) )
+        scored_matches.sort(reverse=True, key=lambda x: x[0])
+        
+        # Try to match each detection with the best track
+        for (j, (current, track, skip)) in scored_matches:
+            if current not in current_detections:
+                # We already matched this with another track
+                continue
+            track.append(current)
+            current_detections.remove(current)
+            # Update histograms
+            inc(output.hst_skip, skip)
+            jaccard_bin = round(j / args.hst_jaccard_bin_size) * args.hst_jaccard_bin_size
+            inc(output.hst_jaccard, jaccard_bin)
+
+        # Everything that wasn't paired becomes a new track
+        for current in current_detections:
+            tracks.append([current])
+
+        frame_number += 1
+
+    assert(frame_size is not None)
+    return (tracks, frame_size)
+
+
+# Arguments:
+#  - tracks, list of lists of Detection objects
+#  - args, command line params
+#  - output, object to stuff statistics and other side outputs into
+# Returns:
+#  - valid_tracks, a list of lists of Detection objects
+def discard_invalid_tracks(tracks, args, output):
+    valid_tracks = []
+    for track in tracks:
+        # Drop track if overall frame count is too low
+        frame_count = track[-1].frame_number - track[0].frame_number + 1
+        if frame_count < args.min_frame_count:
+            output.cnt_drop_because_low_frame_count += 1
+            continue
+        
+        # Drop track if detection count is too low
+        num_detections = len(track)
+        if num_detections < args.min_total_detections:
+            output.cnt_drop_because_low_total_detections += 1
+            continue
+
+        # Otherwise keep this track
+        inc(output.hst_frame_count, frame_count)
+        inc(output.hst_total_detections, num_detections)
+        valid_tracks.append(copy.deepcopy(track))
+    return valid_tracks
+
+
+# Arguments:
+#  - tracks, list of lists of Detection objects
+#  - args, command line params
+#  - output, object to stuff statistics and other side outputs into
+# Returns:
+#  - interpolated_tracks, a list of lists of Detection objects
+def interpolate_missing_frames(tracks, args, output):
+    output_tracks = []
+    for track in tracks:
+        interpolated_track = []
+        # Iterate over each pair of adjacent frames
+        for i in range(len(track)-1):
+            d1 = track[i]
+            d2 = track[i+1]
+            interpolated_track.append(copy.copy(d1))
+            frame_delta = d2.frame_number - d1.frame_number
+            rect_delta = d2.as_vec() - d1.as_vec()
+            # Iterate over any missing frames between this pair
+            for frm in range(d1.frame_number+1,d2.frame_number):
+                fraction = float(frm - d1.frame_number)/frame_delta
+                new_rect = d1.as_vec() + fraction*rect_delta
+                new_rect = np.round(new_rect).astype('int32')
+                new_detection = Detection(new_rect, frm, interpolated=True)
+                interpolated_track.append(new_detection)
+        interpolated_track.append(copy.copy(track[-1]))
+        output_tracks.append(interpolated_track)
+    return output_tracks
+
+
+# Arguments:
+#  - tracks, list of lists of Detection objects
+#  - frame_size, as (width, height)
+#  - args, command line params
+#  - output, object to stuff statistics and other side outputs into
+# Returns:
+#  - expanded_tracks, a list of lists of Detection objects
+#  - oversize_tracks, a list of lists of Detection objects
+def expand_bounding_boxes(tracks, frame_size, args, output):
+    (width, height) = frame_size
+    expanded_tracks = []
+    oversize_tracks = []
+    for track in tracks:
+        drop_track = False
+        new_track = []
+        for d in track:
+            # Expand the box along one axis so the aspect ratio is correct
+            required_aspect_ratio = float(args.target_width)/float(args.target_height)
+            actual_aspect_ratio = float(d.width)/float(d.height)
+            scaling = required_aspect_ratio / actual_aspect_ratio
+            x_scaling = scaling if scaling > 1.0 else 1.0
+            y_scaling = 1.0/scaling if scaling <= 1.0 else 1.0
+            # Find the centre of the box, and expand outward from there
+            centre_x = (d.x1 + d.x2)/2.0
+            centre_y = (d.y1 + d.y2)/2.0
+            assert(centre_x >= 0 and centre_x < width)
+            assert(centre_y >= 0 and centre_y < height)
+            # We expand to get the right aspect ratio, and on top of that, we
+            # add an additional command-line-specified scaling factor
+            f = args.bounding_box_scaling_factor
+            x1 = int(round(x_scaling * f * (d.x1 - centre_x) + centre_x))
+            y1 = int(round(y_scaling * f * (d.y1 - centre_y) + centre_y))
+            x2 = int(round(x_scaling * f * (d.x2 - centre_x) + centre_x))
+            y2 = int(round(y_scaling * f * (d.y2 - centre_y) + centre_y))
+            # If we find that the box has now expanded past the edges of the
+            # image, we throw away this entire track :(
+            if x1 < 0 or y1 < 0 or x2 >= width or y2 >= height:
+                drop_track = True
+            new_d = Detection((x1, y1, x2-x1, y2-y1), d.frame_number,
+                              interpolated=d.interpolated)
+            new_track.append(new_d)
+        if drop_track:
+            output.cnt_drop_because_expanded_bb_too_big += 1
+            oversize_tracks.append(new_track)
+        else:
+            expanded_tracks.append(new_track)
+    return (expanded_tracks, oversize_tracks)
+
+
+
+# Arguments:
+#  - cap, opencv reader
+#  - tracks, list of lists of Detection objects
+#  - frame_size, as (width, height)
+#  - args, command line params
+#  - output, object to stuff statistics and other side outputs into
+# Returns:
+#  - stabilized_tracks, a list of lists of Detection objects
+def stabilize_tracks(cap, tracks, frame_size, args, output):
+    (width, height) = frame_size
+    # First build parameter dictionaries for finding features and doing sparse
+    # optical flow.
+    feature_params = dict( maxCorners = args.feature_track_max_corners,
+                           qualityLevel = args.feature_track_quality_level,
+                           minDistance = args.feature_track_min_distnace,
+                           blockSize = args.feature_track_block_size )
+    win_size = args.optical_flow_win_size
+    lk_params = dict( winSize  = (win_size, win_size),
+                      maxLevel = args.optical_flow_max_level,
+                      criteria = args.optical_flow_criteria)
+    
+    # For each of the original tracks, we're going to create a map of
+    # frame_number -> detection to make lookups easier for ourselves. We will
+    # use this lookup to tell us when we need to run stabilization. Since we
+    # don't run stabilization on the first detection in a track (we just copy it
+    # verbatim), we remove that first detection.
+    lookup = [{ d.frame_number : d for d in track[1:] } for track in tracks]
+
+    # Our stabilized tracks start with exactly the same bounding box as our
+    # original tracks, so let's copy over the first bounding boxes now.
+    flow_tracks = [[copy.copy(track[0])] for track in tracks]
+
+    # Let's also build a structure for ourselves to record which tracks have
+    # gone offscreen and need to be thrown away
+    onscreen = [True for _ in tracks]
+    
+    # Now we need to step through the video again
+    frame_number = 0
+    prev_frame = None
+    while(cap.isOpened()):
+        ret, im = cap.read()
+        if not ret:
+            break
+        im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+
+        for track_id in range(len(tracks)):
+            # First check if this track has gone offscreen, and if so bail
+            if not onscreen[track_id]:
+                continue
+            if frame_number in lookup[track_id]:
+                assert(prev_frame is not None)
+                
+                # Grab the previous (stabilized!) detection for this track
+                d = flow_tracks[-1]
+                # Get the current (unstabilized!) detection for this track
+                next_d = lookup[track_id][frame_number]
+                # Since the sizes may be different, resize next_d so that it
+                # matches d's size.
+                next_d = same_size_crop(next_d, d)
+                # next_d may now have gone offscreen. Check for that.
+                if (next_d.x1 < 0 or next_d.y1 < 0 or
+                    next_d.x2 >= width or next_d.y2 >= height):
+                    output.cnt_drop_because_optical_flow_bb_too_big += 1
+                    onscreen[track_id] = False
+                    continue
+
+                # Now crop out the relevant regions from the previous and
+                # current frame, so that we can run optical flow.
+                prev_crop = prev_frame[d.y1:d.y2+1,d.x1:d.x2+1]
+                crop = im[next_d.y1:next_d.y2+1,next_d.x1:next_d.x2+1]
+                # Find features
+                pnts = cv2.goodFeaturesToTrack(prev_crop, **feature_params)
+                if len(pnts) == 0:
+                    # Oops, failed to find tracking points. Record this failure
+                    # and move on.
+                    output.cnt_drop_because_no_feature_points += 1
+                    onscreen[track_id] = False
+                    continue
+
+                # Run optical flow
+                (pnts2, status, _) = cv2.calcOpticalFlowPyrLK(
+                    prev_crop, crop, pnts, None, **lk_params)
+                # Filter out the points where optical flow failed
+                pnts = [p for (p, s) in zip(pnts, status) if s]
+                pnts2 = [p for (p, s) in zip(pnts2, status) if s]
+                if len(pnts) == 0 or len(pnts2) == 0:
+                    # Oops, optical flow calculation failed. Record this failure
+                    # and move on.
+                    output.cnt_drop_because_failed_optical_flow += 1
+                    onscreen[track_id] = False
+                    continue
+
+                # Estimate transform between the two frames
+                pnts += np.array([d.x1,d.y1])
+                pnts2 += np.array([next_d.x1,next_d.y1])
+                transformation = cv2.estimateRigidTransform(pnts,pnts2,fullAffine=False)
+                if transformation is None:
+                    # Oops, can't estimate transform. Record this failure and
+                    # move on.
+                    output.cnt_drop_because_no_rigid_transform += 1
+                    onscreen[track_id] = False
+                    continue
+
+                # Apply the transform to calculate the next stabilized bounding
+                # box.
+                m = transformation[:,:2]
+                b = transformation[:,2:3]
+                new_d = copy.copy(next_d)
+                # Kill the rotation, extract just the scale and offset
+                x1y1 = m.dot(np.array([[d.x1],[d.y1]])) + b
+                x2y2 = m.dot(np.array([[d.x2],[d.y2]])) + b
+                centre = (x1y1 + x2y2) / 2.0
+                diag = (x1y1 - x2y2)
+                diag_len = math.sqrt(diag[0,0]**2 + diag[1,0]**2)
+                old_diag_len = math.sqrt((d.x2-d.x1)**2 + (d.y2-d.y1)**2)
+                scale = diag_len / old_diag_len
+                new_d.x1 = centre[0,0] - scale*(d.x2-d.x1)/2.0
+                new_d.x2 = centre[0,0] + scale*(d.x2-d.x1)/2.0
+                new_d.y1 = centre[1,0] - scale*(d.y2-d.y1)/2.0
+                new_d.y2 = centre[1,0] + scale*(d.y2-d.y1)/2.0
+
+                # The stabilized bounding box may now have gone offscreen, so
+                # check that.
+                if (new_d.x1 < 0 or new_d.y1 < 0 or
+                    new_d.x2 >= width or new_d.y2 >= height):
+                    output.cnt_drop_because_stabilized_bb_too_big += 1
+                    onscreen[track_id] = False
+                    continue
+                    
+                detections_per_frame[frame_number].append(d)
+                new_track.append(d)
+                frame_number += 1
+            prev_frame = im
+        for d in new_track:
+            #print "aspect ratio (before):", float(d.x2-d.x1) / float(d.y2 - d.y1)
+            d.x1 = int(round(d.x1))
+            d.y1 = int(round(d.y1))
+            d.x2 = int(round(d.x2))
+            d.y2 = int(round(d.y2))
+            #print "aspect ratio (after):", float(d.x2-d.x1) / float(d.y2 - d.y1)
+        flow_tracks.append(new_track)
+            # shape = (1, 10, 2) # Needs to be a 3D array
+            # source = np.random.randint(0, 100, shape).astype(np.int)
+            # target = source + np.array([1, 0]).astype(np.int)
+            # transformation = cv2.estimateRigidTransform(source, target, False)
+
+        frame_number += 1
+
+    valid_tracks.extend(flow_tracks)
+    # END TEMP
+
+def better_process(f, args, output):
+    # First, just get face detections and initial face tracks
+    cap = cv2.VideoCapture(f)
+    (initial_tracks, frame_size) = get_initial_tracks(f, args, output)
+    
+    # Then discard those that don't meet length or other requirements
+    valid_tracks = discard_invalid_tracks(initial_tracks, args, output)
+
+    # Now interpolate any missing bounding boxes
+    interpolated_tracks = interpolate_missing_frames(valid_tracks, args, output)
+
+    # Now we want to adjust all of the rectangles so that they have the correct
+    # aspect ratio. We do this by expanding the bounding boxes, never
+    # contracting (since we don't want to throw away anything that was inside
+    # the original bounding box). This means that some bounding boxes may get so
+    # large that they extend outside the original image. We will discard these
+    # tracks.
+    (expanded_tracks, oversize_tracks) = expand_bounding_boxes(
+        interpolated_tracks, frame_size, args, output)
+    
+    # Now we will perform stabilization. The new stabilized track will have
+    # bounding boxes in slightly different locations from the original track. It
+    # is possible that the new bounding boxes may go outside of the original
+    # image. If this happens, we will discard the track. Stabilization needs to
+    # see the frames again, so we reread them from file. TODO: would it be
+    # better to keep them all in memory? Probably doesn't make too much of a
+    # difference since runtime is not dominated by file access.
+    cap = cv2.VideoCapture(f)
+    stabilized_tracks = stabilize_tracks(
+        cap, expanded_tracks, frame_size, args, output)
+    
 for f in ["iVy6Rgdog5oY", "jetOcz4pWPDck", "JhaOVn64HauaY", "JpA6974tuNRoA", "l41lRpI1ejISAVH0s", "L4vyAauJjxOlq", "lfrhq1753H0LC", "LGSc63wrKtKtG", "ml2Lm6lo5HSVy", "ndWC7pp2wKSWc", "NMH1ANukWHhZK", "ods8tx96CvuBG", "OLqdxkiQ3Q7Cw", "oQ7Kz58ZNpm6c", "oRp8OVyUcDBAI", "otfRWaEBmijv2", "pctqGv7NH8voA", "pruglIqg2Hsyc", "RMj1QZfa4JjZm", "SHFqtiEibgeo8", "TLs8z2Mn0RhOE", "U5MuZ4lELv0Eo", "U5poGkzMYOd7G", "UnpijzhwBafBe", "VqndyRC8rcWnS", "Vui3leSkFpkg8", "W1GXtbO5qAPhS", "WoaluZhDpz3zy", "x20dFskH5nwpW", "Xc4vTdVhgQ4ow", "XG1Iu0NH8VOHS", "XjEKa4BHjn7TW", "xnBhXMpDsQZ6o", "yLZwnMvQWqTkY", "10TeLEbt7fLndC", "11dgjtjk5zchRS", "11PSiVXyLMe1X2", "1241korwKdGMBa", "12zkbg2qEZb3Nu", "1403eCPKl5rrA4", "1CthgbtIOu0Du", "28z8pk38RfSY8", "3o7TKtZqP4MyMG5QC4", "3o85fPE3Irg8Wazl9S", "3rgXBPrh1KX3maLMYg", "5aIPErVMawv8Q", "5utwj4dIKEOk", "60CcjMxxCvq0g", "6iZgSVAGAmsbm", "6VhcRljpIT7A4", "6ZhO6QxQ4yqI0", "7MBQ8YA3Oxt3q", "7pKpsdWxPcAbm", "aVv2exYGNUwc8", "b4O5D4wspbBIc", "blMqtjunYqDm", "Bn3yWoKmd1B7O", "bYLvUDLqHPb7a", "CvnAPu8fAQgJq", "E3QcFMX4BQpQk", "FJE4sp5ezhPr2", "FsfczP3ESd5UA", "gCGnG3BLTwFgI"]:
     process(f)
 
