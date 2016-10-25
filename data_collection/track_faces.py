@@ -784,7 +784,7 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
 
     # Our stabilized tracks start with exactly the same bounding box as our
     # original tracks, so let's copy over the first bounding boxes now.
-    flow_tracks = [[copy.copy(track[0])] for track in tracks]
+    stable_tracks = [[copy.copy(track[0])] for track in tracks]
 
     # Let's also build a structure for ourselves to record which tracks have
     # gone offscreen and need to be thrown away
@@ -807,7 +807,7 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
                 assert(prev_frame is not None)
                 
                 # Grab the previous (stabilized!) detection for this track
-                d = flow_tracks[-1]
+                d = stable_tracks[-1]
                 # Get the current (unstabilized!) detection for this track
                 next_d = lookup[track_id][frame_number]
                 # Since the sizes may be different, resize next_d so that it
@@ -870,10 +870,10 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
                 diag_len = math.sqrt(diag[0,0]**2 + diag[1,0]**2)
                 old_diag_len = math.sqrt((d.x2-d.x1)**2 + (d.y2-d.y1)**2)
                 scale = diag_len / old_diag_len
-                new_d.x1 = centre[0,0] - scale*(d.x2-d.x1)/2.0
-                new_d.x2 = centre[0,0] + scale*(d.x2-d.x1)/2.0
-                new_d.y1 = centre[1,0] - scale*(d.y2-d.y1)/2.0
-                new_d.y2 = centre[1,0] + scale*(d.y2-d.y1)/2.0
+                new_d.x1 = int(round(centre[0,0] - scale*(d.x2-d.x1)/2.0))
+                new_d.x2 = int(round(centre[0,0] + scale*(d.x2-d.x1)/2.0))
+                new_d.y1 = int(round(centre[1,0] - scale*(d.y2-d.y1)/2.0))
+                new_d.y2 = int(round(centre[1,0] + scale*(d.y2-d.y1)/2.0))
 
                 # The stabilized bounding box may now have gone offscreen, so
                 # check that.
@@ -883,27 +883,19 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
                     onscreen[track_id] = False
                     continue
                     
-                detections_per_frame[frame_number].append(d)
-                new_track.append(d)
-                frame_number += 1
-            prev_frame = im
-        for d in new_track:
-            #print "aspect ratio (before):", float(d.x2-d.x1) / float(d.y2 - d.y1)
-            d.x1 = int(round(d.x1))
-            d.y1 = int(round(d.y1))
-            d.x2 = int(round(d.x2))
-            d.y2 = int(round(d.y2))
-            #print "aspect ratio (after):", float(d.x2-d.x1) / float(d.y2 - d.y1)
-        flow_tracks.append(new_track)
-            # shape = (1, 10, 2) # Needs to be a 3D array
-            # source = np.random.randint(0, 100, shape).astype(np.int)
-            # target = source + np.array([1, 0]).astype(np.int)
-            # transformation = cv2.estimateRigidTransform(source, target, False)
-
+                # Yay we made it through everything! We can add this stabilized
+                # frame to the stabilized tracks.
+                stable_tracks[track_id].append(new_d)
+        # End of loop over track ids
+        prev_frame = im
         frame_number += 1
+    # End of loop over frames in video
 
-    valid_tracks.extend(flow_tracks)
-    # END TEMP
+    # We are going to a list of stabilized tracks. We are going to keep it in
+    # alignement with the input list, so if there was every a track that went
+    # offscreen during stabilization, we will simply return None in that index.
+    return [track if valid else None
+            for (track, valid) in zip(stable_tracks, onscreen)]
 
 def better_process(f, args, output):
     # First, just get face detections and initial face tracks
@@ -935,6 +927,16 @@ def better_process(f, args, output):
     cap = cv2.VideoCapture(f)
     stabilized_tracks = stabilize_tracks(
         cap, expanded_tracks, frame_size, args, output)
+
+    # For visualization purposes, pair up each stabilized track with its
+    # corresponding unstabilized track, and throw away the pairs where
+    # stabilization failed.
+    pairs = [(e, s) for (e, s) in zip(expanded_tracks, stabilized_tracks)
+             if s is not None]
+    # Now assign each pair a colour.
+    coloured_tracks = [(e, s, c) for ((e, s), c) in zip(pairs, cycle(colours))]
+
+    
     
 for f in ["iVy6Rgdog5oY", "jetOcz4pWPDck", "JhaOVn64HauaY", "JpA6974tuNRoA", "l41lRpI1ejISAVH0s", "L4vyAauJjxOlq", "lfrhq1753H0LC", "LGSc63wrKtKtG", "ml2Lm6lo5HSVy", "ndWC7pp2wKSWc", "NMH1ANukWHhZK", "ods8tx96CvuBG", "OLqdxkiQ3Q7Cw", "oQ7Kz58ZNpm6c", "oRp8OVyUcDBAI", "otfRWaEBmijv2", "pctqGv7NH8voA", "pruglIqg2Hsyc", "RMj1QZfa4JjZm", "SHFqtiEibgeo8", "TLs8z2Mn0RhOE", "U5MuZ4lELv0Eo", "U5poGkzMYOd7G", "UnpijzhwBafBe", "VqndyRC8rcWnS", "Vui3leSkFpkg8", "W1GXtbO5qAPhS", "WoaluZhDpz3zy", "x20dFskH5nwpW", "Xc4vTdVhgQ4ow", "XG1Iu0NH8VOHS", "XjEKa4BHjn7TW", "xnBhXMpDsQZ6o", "yLZwnMvQWqTkY", "10TeLEbt7fLndC", "11dgjtjk5zchRS", "11PSiVXyLMe1X2", "1241korwKdGMBa", "12zkbg2qEZb3Nu", "1403eCPKl5rrA4", "1CthgbtIOu0Du", "28z8pk38RfSY8", "3o7TKtZqP4MyMG5QC4", "3o85fPE3Irg8Wazl9S", "3rgXBPrh1KX3maLMYg", "5aIPErVMawv8Q", "5utwj4dIKEOk", "60CcjMxxCvq0g", "6iZgSVAGAmsbm", "6VhcRljpIT7A4", "6ZhO6QxQ4yqI0", "7MBQ8YA3Oxt3q", "7pKpsdWxPcAbm", "aVv2exYGNUwc8", "b4O5D4wspbBIc", "blMqtjunYqDm", "Bn3yWoKmd1B7O", "bYLvUDLqHPb7a", "CvnAPu8fAQgJq", "E3QcFMX4BQpQk", "FJE4sp5ezhPr2", "FsfczP3ESd5UA", "gCGnG3BLTwFgI"]:
     process(f)
