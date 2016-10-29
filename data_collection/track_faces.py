@@ -23,6 +23,8 @@
 # TODO: TRY SETTING FEATURE TRACK BLOCK SIZE BACK TO 19 TO MATCH OPTICAL FLOW SETTING
 # TODO: Should we add some kind of safeguard if the stabilized bbox drifts too
 # far from the original bbox? And just throw it out in that case?
+# TODO: what is with the crop for FsfczP3ESd5UA? It is garbage and also too
+# short, it should have been thrown away ... :/
 
 import numpy as np
 import cv2
@@ -205,8 +207,8 @@ def process(f):
             frame_size = (im.shape[1], im.shape[0])
 
         side = math.sqrt(im.size)
-        minlen = int(side * args.classifier_min_scale_factor)
-        maxlen = int(side * args.classifier_max_scale_factor)
+        minlen = int(side * args.classifier_min_size_factor)
+        maxlen = int(side * args.classifier_max_size_factor)
 
         features = cc.detectMultiScale(
             im, args.classifier_scale_factor, args.classifier_min_neighbors,
@@ -606,8 +608,8 @@ def get_initial_tracks(cap, args, output):
 
         # Get face detections on this frame
         side = math.sqrt(im.size)
-        minlen = int(side * args.classifier_min_scale_factor)
-        maxlen = int(side * args.classifier_max_scale_factor)
+        minlen = int(side * args.classifier_min_size_factor)
+        maxlen = int(side * args.classifier_max_size_factor)
         features = cc.detectMultiScale(
             im, args.classifier_scale_factor, args.classifier_min_neighbors,
             args.classifier_flags, (minlen, minlen), (maxlen, maxlen))
@@ -653,26 +655,30 @@ def get_initial_tracks(cap, args, output):
 #  - output, object to stuff statistics and other side outputs into
 # Returns:
 #  - valid_tracks, a list of lists of Detection objects
+#  - untracked_detections, a list of Detection objects
 def discard_invalid_tracks(tracks, args, output):
     valid_tracks = []
+    untracked_detections = []
     for track in tracks:
         # Drop track if overall frame count is too low
         frame_count = track[-1].frame_number - track[0].frame_number + 1
         if frame_count < args.min_frame_count:
             output.cnt_drop_because_low_frame_count += 1
+            untracked_detections.extend(copy.deepcopy(track))
             continue
         
         # Drop track if detection count is too low
         num_detections = len(track)
         if num_detections < args.min_total_detections:
             output.cnt_drop_because_low_total_detections += 1
+            untracked_detections.extend(copy.deepcopy(track))
             continue
 
         # Otherwise keep this track
         inc(output.hst_frame_count, frame_count)
         inc(output.hst_total_detections, num_detections)
         valid_tracks.append(copy.deepcopy(track))
-    return valid_tracks
+    return (valid_tracks, untracked_detections)
 
 
 # Arguments:
@@ -768,7 +774,7 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
     # optical flow.
     feature_params = dict( maxCorners = args.feature_track_max_corners,
                            qualityLevel = args.feature_track_quality_level,
-                           minDistance = args.feature_track_min_distnace,
+                           minDistance = args.feature_track_min_distance,
                            blockSize = args.feature_track_block_size )
     win_size = args.optical_flow_win_size
     lk_params = dict( winSize  = (win_size, win_size),
@@ -807,7 +813,7 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
                 assert(prev_frame is not None)
                 
                 # Grab the previous (stabilized!) detection for this track
-                d = stable_tracks[-1]
+                d = stable_tracks[track_id][-1]
                 # Get the current (unstabilized!) detection for this track
                 next_d = lookup[track_id][frame_number]
                 # Since the sizes may be different, resize next_d so that it
@@ -891,19 +897,116 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
         frame_number += 1
     # End of loop over frames in video
 
-    # We are going to a list of stabilized tracks. We are going to keep it in
-    # alignement with the input list, so if there was every a track that went
-    # offscreen during stabilization, we will simply return None in that index.
+    # We are going to output a list of stabilized tracks. We are going to keep
+    # it in alignment with the input list, so if there was ever a track that
+    # went offscreen during stabilization, we will simply return None at that
+    # index.
     return [track if valid else None
             for (track, valid) in zip(stable_tracks, onscreen)]
+
+def generate_visualization(cap, viz_file, stabilized_tracks, expanded_tracks,
+                           untracked_detections, frame_size, args, output):
+    # For visualization purposes, pair up each stabilized track with its
+    # corresponding unstabilized track, and throw away the pairs where
+    # stabilization failed.
+    pairs = [(e, s) for (e, s) in zip(expanded_tracks, stabilized_tracks)
+             if s is not None]
+    # Now assign each pair a colour.
+    coloured_tracks = [(e, s, c) for ((e, s), c) in zip(pairs, cycle(colours))]
+
+    # Create a lookup of untracked detections per frame
+    detections_per_frame = {}
+    for d in untracked_detections:
+        detections_per_frame.setdefault(d.frame_number, []).append(d)
+
+    assert(frame_size is not None)
+    # Open a writer for the debug video
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter(viz_file, fourcc, 25.0, frame_size)
+    # Make cursors for each track
+    cursors = [0 for _ in range(len(coloured_tracks))]
+    
+    frame_number = 0
+    while(cap.isOpened()):
+        ret, im = cap.read()
+        if not ret:
+            break
+
+        # Draw the untracked detections
+        detections = detections_per_frame.get(frame_number, [])
+        for d in detections:
+            # Make a white rectangle
+            cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), (0, 0, 0), 4)
+            cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), (255, 255, 255), 2)
+
+        # Draw the tracked detections
+        for i in range(len(coloured_tracks)):
+            cur = cursors[i]
+            (expanded, stabilized, colour) = coloured_tracks[i]
+            if cur < len(stabilized) and stabilized[cur].frame_number == frame_number:
+                # Draw the original rectangle
+                assert(cur < len(expanded))
+                assert(expanded[cur].frame_number == frame_number)
+                d = expanded[cur]
+                cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), colour, 1)
+                # Draw the stabilized rectangle
+                d = stabilized[cur]
+                cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), (0, 0, 0), 4)
+                cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), colour, 2)
+                cursors[i] += 1
+            
+        frame_number += 1
+        out.write(im)
+    out.release()
+
+def crop_faces(cap, crop_base, stabilized_tracks, args, output):
+    # Remove the empty tracks
+    stabilized_tracks = [s for s in stabilized_tracks if s is not None]
+
+    # Open a writer for each track
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    writers = [cv2.VideoWriter(crop_base + "_" + str(i) + ".mp4",
+                               fourcc, 25.0, (args.target_width, args.target_height))
+               for i in range(len(stabilized_tracks))]
+
+    # Make cursors for each track
+    cursors = [0 for _ in range(len(stabilized_tracks))]
+
+    frame_number = 0
+    while(cap.isOpened()):
+        ret, im = cap.read()
+        if not ret:
+            break
+
+        # First create the crop frames
+        for i in range(len(stabilized_tracks)):
+            cur = cursors[i]
+            t = stabilized_tracks[i]
+            w = writers[i]
+            if cur < len(t) and t[cur].frame_number == frame_number:
+                w.write(get_crop(im, t[cur]))
+                cursors[i] += 1
+        frame_number += 1
+
+    # close the writers
+    for w in writers:
+        w.release()
+
+# gif_id = "CvnAPu8fAQgJq"
+# f = "/home/sandro/Documents/ECE496/gif-gan/data_collection/gifs/" + gif_id + ".mp4"
+# viz_file = "/home/sandro/Documents/ECE496/gif-gan/data_collection/clean_tracks_v1_interpolated/" + gif_id + ".mp4"
+# crop_base = "/home/sandro/Documents/ECE496/gif-gan/data_collection/clean_crops/" + gif_id
+# args = parser.parse_args([]) # Get a default set of arguments
+# output = Output()
 
 def better_process(f, args, output):
     # First, just get face detections and initial face tracks
     cap = cv2.VideoCapture(f)
-    (initial_tracks, frame_size) = get_initial_tracks(f, args, output)
+    (initial_tracks, frame_size) = get_initial_tracks(cap, args, output)
     
     # Then discard those that don't meet length or other requirements
-    valid_tracks = discard_invalid_tracks(initial_tracks, args, output)
+    (valid_tracks, untracked_detections) = discard_invalid_tracks(
+        initial_tracks, args, output)
 
     # Now interpolate any missing bounding boxes
     interpolated_tracks = interpolate_missing_frames(valid_tracks, args, output)
@@ -925,19 +1028,26 @@ def better_process(f, args, output):
     # better to keep them all in memory? Probably doesn't make too much of a
     # difference since runtime is not dominated by file access.
     cap = cv2.VideoCapture(f)
-    stabilized_tracks = stabilize_tracks(
-        cap, expanded_tracks, frame_size, args, output)
+    stabilized_tracks = stabilize_tracks(cap, expanded_tracks, frame_size, args, output)
 
-    # For visualization purposes, pair up each stabilized track with its
-    # corresponding unstabilized track, and throw away the pairs where
-    # stabilization failed.
-    pairs = [(e, s) for (e, s) in zip(expanded_tracks, stabilized_tracks)
-             if s is not None]
-    # Now assign each pair a colour.
-    coloured_tracks = [(e, s, c) for ((e, s), c) in zip(pairs, cycle(colours))]
+    # Now crop out the faces
+    cap = cv2.VideoCapture(f)
+    crop_faces(cap, crop_base, stabilized_tracks, args, output)
 
+    # Generate a debug video.
+    cap = cv2.VideoCapture(f)
+    generate_visualization(cap, viz_file, stabilized_tracks, expanded_tracks,
+                           untracked_detections, frame_size, args, output)
     
     
-for f in ["iVy6Rgdog5oY", "jetOcz4pWPDck", "JhaOVn64HauaY", "JpA6974tuNRoA", "l41lRpI1ejISAVH0s", "L4vyAauJjxOlq", "lfrhq1753H0LC", "LGSc63wrKtKtG", "ml2Lm6lo5HSVy", "ndWC7pp2wKSWc", "NMH1ANukWHhZK", "ods8tx96CvuBG", "OLqdxkiQ3Q7Cw", "oQ7Kz58ZNpm6c", "oRp8OVyUcDBAI", "otfRWaEBmijv2", "pctqGv7NH8voA", "pruglIqg2Hsyc", "RMj1QZfa4JjZm", "SHFqtiEibgeo8", "TLs8z2Mn0RhOE", "U5MuZ4lELv0Eo", "U5poGkzMYOd7G", "UnpijzhwBafBe", "VqndyRC8rcWnS", "Vui3leSkFpkg8", "W1GXtbO5qAPhS", "WoaluZhDpz3zy", "x20dFskH5nwpW", "Xc4vTdVhgQ4ow", "XG1Iu0NH8VOHS", "XjEKa4BHjn7TW", "xnBhXMpDsQZ6o", "yLZwnMvQWqTkY", "10TeLEbt7fLndC", "11dgjtjk5zchRS", "11PSiVXyLMe1X2", "1241korwKdGMBa", "12zkbg2qEZb3Nu", "1403eCPKl5rrA4", "1CthgbtIOu0Du", "28z8pk38RfSY8", "3o7TKtZqP4MyMG5QC4", "3o85fPE3Irg8Wazl9S", "3rgXBPrh1KX3maLMYg", "5aIPErVMawv8Q", "5utwj4dIKEOk", "60CcjMxxCvq0g", "6iZgSVAGAmsbm", "6VhcRljpIT7A4", "6ZhO6QxQ4yqI0", "7MBQ8YA3Oxt3q", "7pKpsdWxPcAbm", "aVv2exYGNUwc8", "b4O5D4wspbBIc", "blMqtjunYqDm", "Bn3yWoKmd1B7O", "bYLvUDLqHPb7a", "CvnAPu8fAQgJq", "E3QcFMX4BQpQk", "FJE4sp5ezhPr2", "FsfczP3ESd5UA", "gCGnG3BLTwFgI"]:
-    process(f)
+# for f in ["iVy6Rgdog5oY", "jetOcz4pWPDck", "JhaOVn64HauaY", "JpA6974tuNRoA", "l41lRpI1ejISAVH0s", "L4vyAauJjxOlq", "lfrhq1753H0LC", "LGSc63wrKtKtG", "ml2Lm6lo5HSVy", "ndWC7pp2wKSWc", "NMH1ANukWHhZK", "ods8tx96CvuBG", "OLqdxkiQ3Q7Cw", "oQ7Kz58ZNpm6c", "oRp8OVyUcDBAI", "otfRWaEBmijv2", "pctqGv7NH8voA", "pruglIqg2Hsyc", "RMj1QZfa4JjZm", "SHFqtiEibgeo8", "TLs8z2Mn0RhOE", "U5MuZ4lELv0Eo", "U5poGkzMYOd7G", "UnpijzhwBafBe", "VqndyRC8rcWnS", "Vui3leSkFpkg8", "W1GXtbO5qAPhS", "WoaluZhDpz3zy", "x20dFskH5nwpW", "Xc4vTdVhgQ4ow", "XG1Iu0NH8VOHS", "XjEKa4BHjn7TW", "xnBhXMpDsQZ6o", "yLZwnMvQWqTkY", "10TeLEbt7fLndC", "11dgjtjk5zchRS", "11PSiVXyLMe1X2", "1241korwKdGMBa", "12zkbg2qEZb3Nu", "1403eCPKl5rrA4", "1CthgbtIOu0Du", "28z8pk38RfSY8", "3o7TKtZqP4MyMG5QC4", "3o85fPE3Irg8Wazl9S", "3rgXBPrh1KX3maLMYg", "5aIPErVMawv8Q", "5utwj4dIKEOk", "60CcjMxxCvq0g", "6iZgSVAGAmsbm", "6VhcRljpIT7A4", "6ZhO6QxQ4yqI0", "7MBQ8YA3Oxt3q", "7pKpsdWxPcAbm", "aVv2exYGNUwc8", "b4O5D4wspbBIc", "blMqtjunYqDm", "Bn3yWoKmd1B7O", "bYLvUDLqHPb7a", "CvnAPu8fAQgJq", "E3QcFMX4BQpQk", "FJE4sp5ezhPr2", "FsfczP3ESd5UA", "gCGnG3BLTwFgI"]:
+#     process(f)
+args = parser.parse_args([]) # Get a default set of arguments
+output = Output()
+for gif_id in ["iVy6Rgdog5oY", "jetOcz4pWPDck", "JhaOVn64HauaY", "JpA6974tuNRoA", "l41lRpI1ejISAVH0s", "L4vyAauJjxOlq", "lfrhq1753H0LC", "LGSc63wrKtKtG", "ml2Lm6lo5HSVy", "ndWC7pp2wKSWc", "NMH1ANukWHhZK", "ods8tx96CvuBG", "OLqdxkiQ3Q7Cw", "oQ7Kz58ZNpm6c", "oRp8OVyUcDBAI", "otfRWaEBmijv2", "pctqGv7NH8voA", "pruglIqg2Hsyc", "RMj1QZfa4JjZm", "SHFqtiEibgeo8", "TLs8z2Mn0RhOE", "U5MuZ4lELv0Eo", "U5poGkzMYOd7G", "UnpijzhwBafBe", "VqndyRC8rcWnS", "Vui3leSkFpkg8", "W1GXtbO5qAPhS", "WoaluZhDpz3zy", "x20dFskH5nwpW", "Xc4vTdVhgQ4ow", "XG1Iu0NH8VOHS", "XjEKa4BHjn7TW", "xnBhXMpDsQZ6o", "yLZwnMvQWqTkY", "10TeLEbt7fLndC", "11dgjtjk5zchRS", "11PSiVXyLMe1X2", "1241korwKdGMBa", "12zkbg2qEZb3Nu", "1403eCPKl5rrA4", "1CthgbtIOu0Du", "28z8pk38RfSY8", "3o7TKtZqP4MyMG5QC4", "3o85fPE3Irg8Wazl9S", "3rgXBPrh1KX3maLMYg", "5aIPErVMawv8Q", "5utwj4dIKEOk", "60CcjMxxCvq0g", "6iZgSVAGAmsbm", "6VhcRljpIT7A4", "6ZhO6QxQ4yqI0", "7MBQ8YA3Oxt3q", "7pKpsdWxPcAbm", "aVv2exYGNUwc8", "b4O5D4wspbBIc", "blMqtjunYqDm", "Bn3yWoKmd1B7O", "bYLvUDLqHPb7a", "CvnAPu8fAQgJq", "E3QcFMX4BQpQk", "FJE4sp5ezhPr2", "FsfczP3ESd5UA", "gCGnG3BLTwFgI"]:
+    f = "/home/sandro/Documents/ECE496/gif-gan/data_collection/gifs/" + gif_id + ".mp4"
+    viz_file = "/home/sandro/Documents/ECE496/gif-gan/data_collection/clean_tracks_v1_interpolated/" + gif_id + ".mp4"
+    crop_base = "/home/sandro/Documents/ECE496/gif-gan/data_collection/clean_crops/" + gif_id
+    better_process(f, args, output)
+    print "processed",f
 
