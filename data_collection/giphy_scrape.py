@@ -8,6 +8,7 @@ import argparse
 import time
 
 giphy_api = "http://api.giphy.com/v1/gifs/random?api_key=dc6zaTOxFJmzC"
+giphy_api_search = "ttp://api.giphy.com/v1/gifs/search?q=face&api_key=dc6zaTOxFJmzC&limit=100&offset="
 
 def git_gifs(threadID, num_gifs):
     global giphy_api
@@ -30,8 +31,11 @@ def git_gifs(threadID, num_gifs):
             gif_url = match.group(1).replace("\\", "")
 
             # prefix file name with date-time and threadID
-            dt = datetime.datetime.now()
-            file_name = dt.strftime("%Y-%m-%d-%H-%M-%S-") + str(threadID) + "-" + str(i)
+            # dt = datetime.datetime.now()
+            # file_name = dt.strftime("%Y-%m-%d-%H-%M-%S-") + str(threadID) + "-" + str(i)
+
+            # set file name to image id
+            file_name = re.search("id\"\:\"([^\"]+)", html).group(1)
             file_path = os.path.abspath(os.path.join(path, file_name + ext))
 
             # retrieve gif/mp4 from query response
