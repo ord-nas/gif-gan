@@ -664,6 +664,7 @@ def discard_invalid_tracks(tracks, args, output):
         frame_count = track[-1].frame_number - track[0].frame_number + 1
         if frame_count < args.min_frame_count:
             output.cnt_drop_because_low_frame_count += 1
+            print "output.cnt_drop_because_low_frame_count"
             untracked_detections.extend(copy.deepcopy(track))
             continue
         
@@ -671,6 +672,7 @@ def discard_invalid_tracks(tracks, args, output):
         num_detections = len(track)
         if num_detections < args.min_total_detections:
             output.cnt_drop_because_low_total_detections += 1
+            print "output.cnt_drop_because_low_total_detections"
             untracked_detections.extend(copy.deepcopy(track))
             continue
 
@@ -753,11 +755,11 @@ def expand_bounding_boxes(tracks, frame_size, args, output):
             new_track.append(new_d)
         if drop_track:
             output.cnt_drop_because_expanded_bb_too_big += 1
+            print "output.cnt_drop_because_expanded_bb_too_big"
             oversize_tracks.append(new_track)
         else:
             expanded_tracks.append(new_track)
     return (expanded_tracks, oversize_tracks)
-
 
 
 # Arguments:
@@ -823,6 +825,7 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
                 if (next_d.x1 < 0 or next_d.y1 < 0 or
                     next_d.x2 >= width or next_d.y2 >= height):
                     output.cnt_drop_because_optical_flow_bb_too_big += 1
+                    print "output.cnt_drop_because_optical_flow_bb_too_big"
                     onscreen[track_id] = False
                     continue
 
@@ -836,6 +839,7 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
                     # Oops, failed to find tracking points. Record this failure
                     # and move on.
                     output.cnt_drop_because_no_feature_points += 1
+                    print "output.cnt_drop_because_no_feature_points"
                     onscreen[track_id] = False
                     continue
 
@@ -849,6 +853,7 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
                     # Oops, optical flow calculation failed. Record this failure
                     # and move on.
                     output.cnt_drop_because_failed_optical_flow += 1
+                    print "output.cnt_drop_because_failed_optical_flow"
                     onscreen[track_id] = False
                     continue
 
@@ -860,6 +865,7 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
                     # Oops, can't estimate transform. Record this failure and
                     # move on.
                     output.cnt_drop_because_no_rigid_transform += 1
+                    print "output.cnt_drop_because_no_rigid_transform"
                     onscreen[track_id] = False
                     continue
 
@@ -886,6 +892,7 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
                 if (new_d.x1 < 0 or new_d.y1 < 0 or
                     new_d.x2 >= width or new_d.y2 >= height):
                     output.cnt_drop_because_stabilized_bb_too_big += 1
+                    print "output.cnt_drop_because_stabilized_bb_too_big"
                     onscreen[track_id] = False
                     continue
                     
@@ -905,7 +912,8 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
             for (track, valid) in zip(stable_tracks, onscreen)]
 
 def generate_visualization(cap, viz_file, stabilized_tracks, expanded_tracks,
-                           untracked_detections, frame_size, args, output):
+                           oversize_tracks, untracked_detections, frame_size,
+                           args, output):
     # For visualization purposes, pair up each stabilized track with its
     # corresponding unstabilized track, and throw away the pairs where
     # stabilization failed.
@@ -919,11 +927,21 @@ def generate_visualization(cap, viz_file, stabilized_tracks, expanded_tracks,
     for d in untracked_detections:
         detections_per_frame.setdefault(d.frame_number, []).append(d)
 
+    # Create a list of all the detections we threw away
+    discarded_tracks = (oversize_tracks +
+                        [e for (e, s) in zip(expanded_tracks, stabilized_tracks)
+                         if s is None])
+    discarded_detections_per_frame = {}
+    for t in discarded_tracks:
+        for d in t:
+            discarded_detections_per_frame.setdefault(d.frame_number, []).append(d)
+
     assert(frame_size is not None)
     # Open a writer for the debug video
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     out = cv2.VideoWriter(viz_file, fourcc, 25.0, frame_size)
-    # Make cursors for each track
+    # Make cursors for each track - it's kinda silly that we use cursors for
+    # these detections but a dictionary for the other detections ... oh well.
     cursors = [0 for _ in range(len(coloured_tracks))]
     
     frame_number = 0
@@ -939,6 +957,16 @@ def generate_visualization(cap, viz_file, stabilized_tracks, expanded_tracks,
             cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), (0, 0, 0), 4)
             cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), (255, 255, 255), 2)
 
+        # Draw the discarded detections
+        discarded = discarded_detections_per_frame.get(frame_number, [])
+        for d in discarded:
+            # Make a white rectangle
+            cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), (0, 0, 0), 4)
+            cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), (255, 255, 255), 2)
+            # Draw a big 'X' in the rectangle
+            cv2.line(im, (d.x1, d.y1), (d.x2, d.y2), (255, 255, 255), 2)
+            cv2.line(im, (d.x1, d.y2), (d.x2, d.y1), (255, 255, 255), 2)
+            
         # Draw the tracked detections
         for i in range(len(coloured_tracks)):
             cur = cursors[i]
@@ -1037,7 +1065,7 @@ def better_process(f, args, output):
     # Generate a debug video.
     cap = cv2.VideoCapture(f)
     generate_visualization(cap, viz_file, stabilized_tracks, expanded_tracks,
-                           untracked_detections, frame_size, args, output)
+                           oversize_tracks, untracked_detections, frame_size, args, output)
     
     
 # for f in ["iVy6Rgdog5oY", "jetOcz4pWPDck", "JhaOVn64HauaY", "JpA6974tuNRoA", "l41lRpI1ejISAVH0s", "L4vyAauJjxOlq", "lfrhq1753H0LC", "LGSc63wrKtKtG", "ml2Lm6lo5HSVy", "ndWC7pp2wKSWc", "NMH1ANukWHhZK", "ods8tx96CvuBG", "OLqdxkiQ3Q7Cw", "oQ7Kz58ZNpm6c", "oRp8OVyUcDBAI", "otfRWaEBmijv2", "pctqGv7NH8voA", "pruglIqg2Hsyc", "RMj1QZfa4JjZm", "SHFqtiEibgeo8", "TLs8z2Mn0RhOE", "U5MuZ4lELv0Eo", "U5poGkzMYOd7G", "UnpijzhwBafBe", "VqndyRC8rcWnS", "Vui3leSkFpkg8", "W1GXtbO5qAPhS", "WoaluZhDpz3zy", "x20dFskH5nwpW", "Xc4vTdVhgQ4ow", "XG1Iu0NH8VOHS", "XjEKa4BHjn7TW", "xnBhXMpDsQZ6o", "yLZwnMvQWqTkY", "10TeLEbt7fLndC", "11dgjtjk5zchRS", "11PSiVXyLMe1X2", "1241korwKdGMBa", "12zkbg2qEZb3Nu", "1403eCPKl5rrA4", "1CthgbtIOu0Du", "28z8pk38RfSY8", "3o7TKtZqP4MyMG5QC4", "3o85fPE3Irg8Wazl9S", "3rgXBPrh1KX3maLMYg", "5aIPErVMawv8Q", "5utwj4dIKEOk", "60CcjMxxCvq0g", "6iZgSVAGAmsbm", "6VhcRljpIT7A4", "6ZhO6QxQ4yqI0", "7MBQ8YA3Oxt3q", "7pKpsdWxPcAbm", "aVv2exYGNUwc8", "b4O5D4wspbBIc", "blMqtjunYqDm", "Bn3yWoKmd1B7O", "bYLvUDLqHPb7a", "CvnAPu8fAQgJq", "E3QcFMX4BQpQk", "FJE4sp5ezhPr2", "FsfczP3ESd5UA", "gCGnG3BLTwFgI"]:
@@ -1045,6 +1073,7 @@ def better_process(f, args, output):
 args = parser.parse_args([]) # Get a default set of arguments
 output = Output()
 for gif_id in ["iVy6Rgdog5oY", "jetOcz4pWPDck", "JhaOVn64HauaY", "JpA6974tuNRoA", "l41lRpI1ejISAVH0s", "L4vyAauJjxOlq", "lfrhq1753H0LC", "LGSc63wrKtKtG", "ml2Lm6lo5HSVy", "ndWC7pp2wKSWc", "NMH1ANukWHhZK", "ods8tx96CvuBG", "OLqdxkiQ3Q7Cw", "oQ7Kz58ZNpm6c", "oRp8OVyUcDBAI", "otfRWaEBmijv2", "pctqGv7NH8voA", "pruglIqg2Hsyc", "RMj1QZfa4JjZm", "SHFqtiEibgeo8", "TLs8z2Mn0RhOE", "U5MuZ4lELv0Eo", "U5poGkzMYOd7G", "UnpijzhwBafBe", "VqndyRC8rcWnS", "Vui3leSkFpkg8", "W1GXtbO5qAPhS", "WoaluZhDpz3zy", "x20dFskH5nwpW", "Xc4vTdVhgQ4ow", "XG1Iu0NH8VOHS", "XjEKa4BHjn7TW", "xnBhXMpDsQZ6o", "yLZwnMvQWqTkY", "10TeLEbt7fLndC", "11dgjtjk5zchRS", "11PSiVXyLMe1X2", "1241korwKdGMBa", "12zkbg2qEZb3Nu", "1403eCPKl5rrA4", "1CthgbtIOu0Du", "28z8pk38RfSY8", "3o7TKtZqP4MyMG5QC4", "3o85fPE3Irg8Wazl9S", "3rgXBPrh1KX3maLMYg", "5aIPErVMawv8Q", "5utwj4dIKEOk", "60CcjMxxCvq0g", "6iZgSVAGAmsbm", "6VhcRljpIT7A4", "6ZhO6QxQ4yqI0", "7MBQ8YA3Oxt3q", "7pKpsdWxPcAbm", "aVv2exYGNUwc8", "b4O5D4wspbBIc", "blMqtjunYqDm", "Bn3yWoKmd1B7O", "bYLvUDLqHPb7a", "CvnAPu8fAQgJq", "E3QcFMX4BQpQk", "FJE4sp5ezhPr2", "FsfczP3ESd5UA", "gCGnG3BLTwFgI"]:
+    # gif_id = "x20dFskH5nwpW"
     f = "/home/sandro/Documents/ECE496/gif-gan/data_collection/gifs/" + gif_id + ".mp4"
     viz_file = "/home/sandro/Documents/ECE496/gif-gan/data_collection/clean_tracks_v1_interpolated/" + gif_id + ".mp4"
     crop_base = "/home/sandro/Documents/ECE496/gif-gan/data_collection/clean_crops/" + gif_id
