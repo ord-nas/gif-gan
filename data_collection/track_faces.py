@@ -562,7 +562,7 @@ def generate_visualization(cap, viz_file, stabilized_tracks, expanded_tracks,
 
     assert(frame_size is not None)
     # Open a writer for the debug video
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    fourcc = 0x20
     out = cv2.VideoWriter(viz_file, fourcc, 25.0, frame_size)
     # Make cursors for each track - it's kinda silly that we use cursors for
     # these detections but a dictionary for the other detections ... oh well.
@@ -621,7 +621,7 @@ def crop_faces(cap, crop_base, stabilized_tracks, args, output):
     stabilized_tracks = [s for s in stabilized_tracks if s is not None]
 
     # Open a writer for each track
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    fourcc = 0x20
     writers = [cv2.VideoWriter(crop_base + "_" + str(i) + ".mp4",
                                fourcc, 25.0, (args.target_width, args.target_height))
                for i in range(len(stabilized_tracks))]
@@ -705,8 +705,8 @@ for gif_id in ["iVy6Rgdog5oY", "jetOcz4pWPDck", "JhaOVn64HauaY", "JpA6974tuNRoA"
 #for gif_id in ["11PSiVXyLMe1X2", "5utwj4dIKEOk", "E3QcFMX4BQpQk", "FsfczP3ESd5UA", "U5poGkzMYOd7G", "XjEKa4BHjn7TW", "l41lRpI1ejISAVH0s", "x20dFskH5nwpW"]:
     # gif_id = "x20dFskH5nwpW"
     f = "/home/sandro/Documents/ECE496/gif-gan/data_collection/gifs/" + gif_id + ".mp4"
-    viz_file = "/home/sandro/Documents/ECE496/gif-gan/data_collection/clean_tracks_v1_interpolated/" + gif_id + ".mp4"
-    crop_base = "/home/sandro/Documents/ECE496/gif-gan/data_collection/clean_crops/" + gif_id
+    viz_file = "/home/sandro/Documents/ECE496/gif-gan/data_collection/clean_tracks_v1_interpolated_no_fourcc/" + gif_id + ".mp4"
+    crop_base = "/home/sandro/Documents/ECE496/gif-gan/data_collection/clean_crops_no_fourcc/" + gif_id
     process(f, args, output)
     print "processed",f
 
