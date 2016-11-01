@@ -92,6 +92,13 @@ class Output:
         self.cnt_drop_because_failed_optical_flow = 0
         self.cnt_drop_because_no_rigid_transform = 0
 
+        # Truncate counters
+        self.cnt_truncate_because_optical_flow_bb_too_big = 0
+        self.cnt_truncate_because_stabilized_bb_too_big = 0
+        self.cnt_truncate_because_no_feature_points = 0
+        self.cnt_truncate_because_failed_optical_flow = 0
+        self.cnt_truncate_because_no_rigid_transform = 0
+
         # Histograms
         self.hst_frame_count = {}
         self.hst_total_detections = {}
@@ -824,8 +831,12 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
                 # next_d may now have gone offscreen. Check for that.
                 if (next_d.x1 < 0 or next_d.y1 < 0 or
                     next_d.x2 >= width or next_d.y2 >= height):
-                    output.cnt_drop_because_optical_flow_bb_too_big += 1
-                    print "output.cnt_drop_because_optical_flow_bb_too_big"
+                    if len(stable_tracks[track_id]) >= args.min_frame_count:
+                        output.cnt_truncate_because_optical_flow_bb_too_big += 1
+                        print "output.cnt_truncate_because_optical_flow_bb_too_big"
+                    else:
+                        output.cnt_drop_because_optical_flow_bb_too_big += 1
+                        print "output.cnt_drop_because_optical_flow_bb_too_big"
                     onscreen[track_id] = False
                     continue
 
@@ -838,8 +849,12 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
                 if len(pnts) == 0:
                     # Oops, failed to find tracking points. Record this failure
                     # and move on.
-                    output.cnt_drop_because_no_feature_points += 1
-                    print "output.cnt_drop_because_no_feature_points"
+                    if len(stable_tracks[track_id]) >= args.min_frame_count:
+                        output.cnt_truncate_because_no_feature_points += 1
+                        print "output.cnt_truncate_because_no_feature_points"
+                    else:
+                        output.cnt_drop_because_no_feature_points += 1
+                        print "output.cnt_drop_because_no_feature_points"
                     onscreen[track_id] = False
                     continue
 
@@ -852,8 +867,12 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
                 if len(pnts) == 0 or len(pnts2) == 0:
                     # Oops, optical flow calculation failed. Record this failure
                     # and move on.
-                    output.cnt_drop_because_failed_optical_flow += 1
-                    print "output.cnt_drop_because_failed_optical_flow"
+                    if len(stable_tracks[track_id]) >= args.min_frame_count:
+                        output.cnt_truncate_because_failed_optical_flow += 1
+                        print "output.cnt_truncate_because_failed_optical_flow"
+                    else:
+                        output.cnt_drop_because_failed_optical_flow += 1
+                        print "output.cnt_drop_because_failed_optical_flow"
                     onscreen[track_id] = False
                     continue
 
@@ -864,8 +883,12 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
                 if transformation is None:
                     # Oops, can't estimate transform. Record this failure and
                     # move on.
-                    output.cnt_drop_because_no_rigid_transform += 1
-                    print "output.cnt_drop_because_no_rigid_transform"
+                    if len(stable_tracks[track_id]) >= args.min_frame_count:
+                        output.cnt_truncate_because_no_rigid_transform += 1
+                        print "output.cnt_truncate_because_no_rigid_transform"
+                    else:
+                        output.cnt_drop_because_no_rigid_transform += 1
+                        print "output.cnt_drop_because_no_rigid_transform"
                     onscreen[track_id] = False
                     continue
 
@@ -891,8 +914,12 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
                 # check that.
                 if (new_d.x1 < 0 or new_d.y1 < 0 or
                     new_d.x2 >= width or new_d.y2 >= height):
-                    output.cnt_drop_because_stabilized_bb_too_big += 1
-                    print "output.cnt_drop_because_stabilized_bb_too_big"
+                    if len(stable_tracks[track_id]) >= args.min_frame_count:
+                        output.cnt_truncate_because_stabilized_bb_too_big += 1
+                        print "output.cnt_truncate_because_stabilized_bb_too_big"
+                    else:
+                        output.cnt_drop_because_stabilized_bb_too_big += 1
+                        print "output.cnt_drop_because_stabilized_bb_too_big"
                     onscreen[track_id] = False
                     continue
                     
@@ -906,10 +933,9 @@ def stabilize_tracks(cap, tracks, frame_size, args, output):
 
     # We are going to output a list of stabilized tracks. We are going to keep
     # it in alignment with the input list, so if there was ever a track that
-    # went offscreen during stabilization, we will simply return None at that
-    # index.
-    return [track if valid else None
-            for (track, valid) in zip(stable_tracks, onscreen)]
+    # went offscreen during stabilization and we don't have enough frames to
+    # justify keeping it, we will simply return None at that index.
+    return [track if len(track) >= args.min_frame_count else None for track in stable_tracks]
 
 def generate_visualization(cap, viz_file, stabilized_tracks, expanded_tracks,
                            oversize_tracks, untracked_detections, frame_size,
@@ -971,16 +997,21 @@ def generate_visualization(cap, viz_file, stabilized_tracks, expanded_tracks,
         for i in range(len(coloured_tracks)):
             cur = cursors[i]
             (expanded, stabilized, colour) = coloured_tracks[i]
-            if cur < len(stabilized) and stabilized[cur].frame_number == frame_number:
+            if cur < len(expanded) and expanded[cur].frame_number == frame_number:
                 # Draw the original rectangle
-                assert(cur < len(expanded))
-                assert(expanded[cur].frame_number == frame_number)
                 d = expanded[cur]
                 cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), colour, 1)
-                # Draw the stabilized rectangle
-                d = stabilized[cur]
-                cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), (0, 0, 0), 4)
-                cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), colour, 2)
+                if cur < len(stabilized):
+                    # Draw the stabilized rectangle
+                    assert(stabilized[cur].frame_number == frame_number)
+                    d = stabilized[cur]
+                    cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), (0, 0, 0), 4)
+                    cv2.rectangle(im, (d.x1, d.y1), (d.x2, d.y2), colour, 2)
+                else:
+                    # Otherwise, we lost this track partway through during
+                    # stabilization, so let's notate that with an 'X'
+                    cv2.line(im, (d.x1, d.y1), (d.x2, d.y2), colour, 1)
+                    cv2.line(im, (d.x1, d.y2), (d.x2, d.y1), colour, 1)
                 cursors[i] += 1
             
         frame_number += 1
@@ -1073,6 +1104,7 @@ def better_process(f, args, output):
 args = parser.parse_args([]) # Get a default set of arguments
 output = Output()
 for gif_id in ["iVy6Rgdog5oY", "jetOcz4pWPDck", "JhaOVn64HauaY", "JpA6974tuNRoA", "l41lRpI1ejISAVH0s", "L4vyAauJjxOlq", "lfrhq1753H0LC", "LGSc63wrKtKtG", "ml2Lm6lo5HSVy", "ndWC7pp2wKSWc", "NMH1ANukWHhZK", "ods8tx96CvuBG", "OLqdxkiQ3Q7Cw", "oQ7Kz58ZNpm6c", "oRp8OVyUcDBAI", "otfRWaEBmijv2", "pctqGv7NH8voA", "pruglIqg2Hsyc", "RMj1QZfa4JjZm", "SHFqtiEibgeo8", "TLs8z2Mn0RhOE", "U5MuZ4lELv0Eo", "U5poGkzMYOd7G", "UnpijzhwBafBe", "VqndyRC8rcWnS", "Vui3leSkFpkg8", "W1GXtbO5qAPhS", "WoaluZhDpz3zy", "x20dFskH5nwpW", "Xc4vTdVhgQ4ow", "XG1Iu0NH8VOHS", "XjEKa4BHjn7TW", "xnBhXMpDsQZ6o", "yLZwnMvQWqTkY", "10TeLEbt7fLndC", "11dgjtjk5zchRS", "11PSiVXyLMe1X2", "1241korwKdGMBa", "12zkbg2qEZb3Nu", "1403eCPKl5rrA4", "1CthgbtIOu0Du", "28z8pk38RfSY8", "3o7TKtZqP4MyMG5QC4", "3o85fPE3Irg8Wazl9S", "3rgXBPrh1KX3maLMYg", "5aIPErVMawv8Q", "5utwj4dIKEOk", "60CcjMxxCvq0g", "6iZgSVAGAmsbm", "6VhcRljpIT7A4", "6ZhO6QxQ4yqI0", "7MBQ8YA3Oxt3q", "7pKpsdWxPcAbm", "aVv2exYGNUwc8", "b4O5D4wspbBIc", "blMqtjunYqDm", "Bn3yWoKmd1B7O", "bYLvUDLqHPb7a", "CvnAPu8fAQgJq", "E3QcFMX4BQpQk", "FJE4sp5ezhPr2", "FsfczP3ESd5UA", "gCGnG3BLTwFgI"]:
+#for gif_id in ["11PSiVXyLMe1X2", "5utwj4dIKEOk", "E3QcFMX4BQpQk", "FsfczP3ESd5UA", "U5poGkzMYOd7G", "XjEKa4BHjn7TW", "l41lRpI1ejISAVH0s", "x20dFskH5nwpW"]:
     # gif_id = "x20dFskH5nwpW"
     f = "/home/sandro/Documents/ECE496/gif-gan/data_collection/gifs/" + gif_id + ".mp4"
     viz_file = "/home/sandro/Documents/ECE496/gif-gan/data_collection/clean_tracks_v1_interpolated/" + gif_id + ".mp4"
