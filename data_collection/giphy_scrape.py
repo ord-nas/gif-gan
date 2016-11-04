@@ -5,42 +5,45 @@ import os
 import datetime
 import threading
 import argparse
+import sys
 import time
 
-giphy_api = "http://api.giphy.com/v1/gifs/random?api_key=dc6zaTOxFJmzC"
-giphy_api_search = "ttp://api.giphy.com/v1/gifs/search?q=face&api_key=dc6zaTOxFJmzC&limit=100&offset="
+giphy_api_random = "http://api.giphy.com/v1/gifs/random?api_key=dc6zaTOxFJmzC"
+giphy_api_search = "http://api.giphy.com/v1/gifs/search?q="
+giphy_api_search_2 = "&api_key=dc6zaTOxFJmzC&limit=100&offset="
 
-def git_gifs(threadID, num_gifs):
-    global giphy_api
+# fill in the list keywords
+keyword_list = []
+
+def get_videos(threadID, num_items):
+    global giphy_api_random
+    global giphy_api_search
     global path
-    global mode
+    global num_threads
 
     i = 0
     failed_counter = 0
-    while(i < num_gifs and failed_counter < 20):
+    while((i < num_items / 100) and (failed_counter < 20)):
         try:
-            # query random gif/mp4, obtain url
-            response = urllib2.urlopen(giphy_api)
+            offset = threadID * num_items + 100 * i
+            # hack to deal with the very last query
+            if ((threadID == num_threads - 1) and (i == num_items / 100 - 1)):
+                offset -= 1
+            # query search result, obtain url
+            response = urllib2.urlopen(giphy_api_search + keyword + giphy_api_search_2 + str(offset))
             html = response.read()
-            if (mode == "gif"):
-                match = re.search("image_original_url\"\:\"([^\"]+)", html)
-                ext = ".gif"
-            elif (mode == "mp4"):
-                match = re.search("image_mp4_url\"\:\"([^\"]+)", html)
-                ext = ".mp4"
-            gif_url = match.group(1).replace("\\", "")
+            url_list = re.findall("\"mp4\":\"([^\"]+giphy\.mp4)\"", html)
 
-            # prefix file name with date-time and threadID
-            # dt = datetime.datetime.now()
-            # file_name = dt.strftime("%Y-%m-%d-%H-%M-%S-") + str(threadID) + "-" + str(i)
+            for url in url_list:
+                video_url = url.replace("\\", "")
 
-            # set file name to image id
-            file_name = re.search("id\"\:\"([^\"]+)", html).group(1)
-            file_path = os.path.abspath(os.path.join(path, file_name + ext))
+                # set file name to image id
+                file_name = re.search("media/([^/]+)/", video_url).group(1)
+                file_path = os.path.abspath(os.path.join(path, file_name + ".mp4"))
 
-            # retrieve gif/mp4 from query response
-            urllib.urlretrieve(gif_url, file_path)
-            print "\"" + gif_url +"\" saved to " + file_path
+                # retrieve mp4 from query response
+                urllib.urlretrieve(video_url, file_path)
+                print "\"" + video_url +"\" saved to " + file_path
             i += 1
             failed_counter = 0
         except:
@@ -49,23 +52,25 @@ def git_gifs(threadID, num_gifs):
 
 
 class myThread(threading.Thread):
-    def __init__(self, threadID, num_gifs):
+    def __init__(self, threadID, num_items, keyword):
         threading.Thread.__init__(self)
         self.threadID = threadID
-        self.num_gifs = num_gifs
+        self.num_items = num_items
+        self.keyword = keyword
     
     def run(self):
         print "Starting thread " + str(self.threadID)
-        git_gifs(self.threadID, self.num_gifs)
+        get_videos(self.threadID, self.num_items)
         print "Exiting thread " + str(self.threadID)
+        print "Current Active Count = " + str(threading.active_count())
 
         
 ##### main ######
 parser = argparse.ArgumentParser()
-parser.add_argument("--path", type=str, help="Destination path for storing downloaded gifs. Default to \"./gifs_raw/\".", default = "./gifs_raw/")
+parser.add_argument("--path", type=str, help="Destination path for storing downloaded videos. Default to \"./mp4s_raw/\".", default = "./mp4s_raw/")
 parser.add_argument("--num_threads", type=int, help="Number of threads to run. Default to 50.", default = 50)
-parser.add_argument("--num_items_per_thread", type=int, help="Number of times (gif or mp4) to be downloaded per thread. Default to 10.", default = 10)
-parser.add_argument("--mode", type=str, help="\"gif\" or \"mp4\". Default to mp4.", default = "mp4")
+parser.add_argument("--num_items_per_thread", type=int, help="Number of videos to be downloaded per thread. Default to 100.", default = 100)
+parser.add_argument("--mode", type=str, help="\"random\" or \"search\". Default to mp4.", default = "random")
 args = parser.parse_args()
 
 path = args.path
@@ -73,15 +78,25 @@ if not os.path.isdir(os.path.abspath(path)):
     os.mkdir(os.path.abspath(path))
 
 mode = args.mode
-if (mode != "gif" and mode != "mp4"):
-    sys.exit("Unknown mode. Must be \"gif\" or \"mp4\".")
+if (mode != "random" and mode != "search"):
+    sys.exit("Unknown mode. Must be \"random\" or \"search\".")
 
-thread_list = []
-for t in range(args.num_threads):
-    thread = myThread(t, args.num_items_per_thread)
-    thread.start()
-    thread_list.append(thread)
-    time.sleep(0.5)
+num_items_per_thread = args.num_items_per_thread
+if (num_items_per_thread % 100 != 0):
+    sys.exit("Invalid num_items_per_thread. Must be an integer multiple of 100.")
+
+num_threads = args.num_threads
+
+for keyword in keyword_list:
+    print "keyword = " + keyword
+    thread_list = []
+    for t in range(args.num_threads):
+        thread = myThread(t, num_items_per_thread, keyword)
+        thread.start()
+        thread_list.append(thread)
+        time.sleep(0.1)
+    for thread in thread_list:
+        thread.join()
     
     
     

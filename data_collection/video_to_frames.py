@@ -13,10 +13,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--input_path", type=str, required=True)
 parser.add_argument("--output_path", type=str, required=True)
 parser.add_argument("--num_videos", type=int, default = 10)
-parser.add_argument("--input_type", type=str, default = "gif")
+parser.add_argument("--input_type", type=str, default = "mp4")
 parser.add_argument("--output_type", type=str, default = "png")
 parser.add_argument("--frame_rate", type=int, default = 10)
-parser.add_argument("--crop_faces", type=bool, default = False)
+parser.add_argument("--crop_faces", type=bool, default = True)
 parser.add_argument("--facedetect_script_path", type=str, default = "./facedetect.py")
 args = parser.parse_args()
 
@@ -53,7 +53,8 @@ if crop_faces:
 count = 1
 for file in os.listdir(input_path):
     input_file_path = os.path.join(input_path, file)
-    if os.path.isfile(input_file_path) and file.endswith("." + input_type):
+    # if os.path.isfile(input_file_path) and file.endswith("." + input_type):
+    if os.path.isfile(input_file_path) and file.endswith(input_type):
         file_name = re.search("(.+)\." + input_type, file).group(1)
         output_file_path = os.path.join(output_path, file_name)
         if not os.path.isdir(output_file_path):
@@ -65,6 +66,7 @@ for file in os.listdir(input_path):
             if (crop_faces):
                 for image in os.listdir(output_file_path):
                     image_path = os.path.join(output_file_path, image)
+                    output_image_path = os.path.join(output_path, file_name + "_" + image)
                     args = ["python", facedetect_script_path, "--best", image_path]
                     print " ".join(args)
                     p = subprocess.Popen(args, stdout=subprocess.PIPE)
@@ -72,17 +74,17 @@ for file in os.listdir(input_path):
                     if (stdout != ""): # a face has been detected, crop the image
                         [x, y, w, h] = [int(i) for i in stdout.split(" ")]
                         img = cv2.imread(image_path)
-                        cropped_img =  img[y:y+h, x:x+w]
-                        cv2.imwrite(image_path, cropped_img)
+                        center = [y + h/2, x + w/2]
+                        if ((center[0] - 54) >= 0 and (center[1] - 54) >= 0):
+                            cropped_img =  img[(center[0] - 54):(center[0] + 54), (center[1] - 54):(center[1] + 54)]
+                        # cropped_img =  img[y:y+h, x:x+w]
+                        cv2.imwrite(output_image_path, cropped_img)
                     else: # no face detected, delete image
                         os.remove(image_path)
 
                 if os.listdir(output_file_path) == []:
                     os.rmdir(output_file_path)
 
-                    
-
-        
         count += 1
 
     if count > num_videos:
