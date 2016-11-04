@@ -1,0 +1,36 @@
+# keywords tried so far
+face
+face+sad
+face+happy
+face+people
+people
+eye
+nose
+mouth
+sad
+happy
+shock
+cry
+smile
+reaction
+face+weird
+glasses
+sun+glasses
+talk
+expression
+face+expression
+happy+people
+sad+people
+funny
+face+funny
+people+funny
+head
+laugh
+face+laugh
+happy+funny
+
+# keywords not tried yet
+surprise
+awe
+stupid
+
