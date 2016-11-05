@@ -28,9 +28,14 @@ head
 laugh
 face+laugh
 happy+funny
-
-# keywords not tried yet
 surprise
 awe
 stupid
+confused
+lazy
+thinking
+mad
+angry
+smart
 
+# keywords not tried yet
