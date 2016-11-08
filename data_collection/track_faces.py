@@ -759,20 +759,17 @@ def write_stats(args, stats):
     faces_per_gif = "%.2f" % faces_per_gif_value
     faces_at_completion = int(round(faces_per_gif_value * stats.cnt_input_files))
     start_time = stats.start_time_str
+    elapsed_time_value = time.time() - stats.start_time
+    elapsed_time = seconds_to_duration_str(elapsed_time_value)
     time_per_gif = "0"
     if files_processed > 0:
-        time_per_gif = "%.2f" % ((time.time() - stats.start_time) / files_processed)
+        time_per_gif = "%.2f" % (elapsed_time_value / files_processed)
     files_done = files_processed
     files_left = stats.cnt_input_files - files_processed
     time_remaining = "calculating..."
     if files_processed > 0:
         time_remaining_value = (time.time() - stats.start_time) * files_left / files_processed
-        days = int(time_remaining_value / (60*60*24))
-        hours = int(time_remaining_value / (60*60)) - days*24
-        minutes = int(time_remaining_value / 60) - days*24*60 - hours*60
-        seconds = int(time_remaining_value) - days*24*60*60 - hours*60*60 - minutes*60
-        time_remaining = "%d day(s) %d hour(s) %d minute(s) %d second(s)" % (
-            days, hours, minutes, seconds)
+        time_remaining = seconds_to_duration_str(time_remaining_value)
     success = stats.cnt_processed_files
     error = stats.cnt_errors
 
@@ -994,6 +991,16 @@ def write_stats(args, stats):
 
 
 # Helper functions
+
+
+def seconds_to_duration_str(time_value):
+    days = int(time_value / (60*60*24))
+    hours = int(time_value / (60*60)) - days*24
+    minutes = int(time_value / 60) - days*24*60 - hours*60
+    seconds = int(time_value) - days*24*60*60 - hours*60*60 - minutes*60
+    time_str = "%d day(s) %d hour(s) %d minute(s) %d second(s)" % (
+        days, hours, minutes, seconds)
+    return time_str
 
 
 # Compute jaccard index between the rectangles a and b (which are both Detection
