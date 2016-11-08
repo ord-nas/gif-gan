@@ -4,13 +4,13 @@
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.3.0/Chart.bundle.js"></script>
     </head>
     <body>
-	<input type="checkbox" id="reload"/>Auto reload every 6 seconds<br/>
+	<input type="checkbox" id="reload"/>Auto reload every 30 seconds<br/>
 	<script>
 	 setInterval(function() {
 	     if (document.getElementById("reload").checked) {
 		 location.reload();
 	     }
-	 }, 6000);
+	 }, 30000);
 	</script>
 
 	<h1>Basic Progress Stats</h1>
@@ -188,7 +188,7 @@
 		 responsive: false,
 	     },
 	 });
-	</script>	
+	</script>
 
 	<h4>Raw Jaccard Histogram</h4>
 	<p>Histogram of raw jaccard indices: counts all jaccard indices between
@@ -200,7 +200,7 @@
 	 var myBarChart = new Chart(ctx, {
 	     type: 'bar',
 	     data: {
-		 labels: [$chart_raw_jaccard_hist_labels], // VALUES
+		 labels: [$chart_raw_jaccard_hist_labels],
 		 datasets: [
 		     {
 			 label: "Num pairs with this jaccard index",
@@ -232,19 +232,18 @@
 	<h4>Used Jaccard Histogram</h4>
 	<p>Histogram of used jaccard indices: counts all jaccard indices between
 	pairs of detections that we actually used to join tracks</p>
-	<p>(Average jaccard index used: 0.75)</p> <!-- VALUE -->
+	<p>(Average jaccard index used: $average_used_jaccard)</p>
 	<canvas id="chart-used-jaccard-hist" width="1000" height="500"></canvas>
 	<script>
 	 var ctx = document.getElementById("chart-used-jaccard-hist");
 	 var myBarChart = new Chart(ctx, {
 	     type: 'bar',
 	     data: {
-		 labels: [$chart_used_jaccard_hist_labels], // VALUES
+		 labels: [$chart_used_jaccard_hist_labels],
 		 datasets: [
 		     {
 			 label: "Num pairs with this jaccard index",
 			 backgroundColor: [$chart_used_jaccard_hist_colours],
-			 // VALUES
 			 data: [$chart_used_jaccard_hist_data],
 		     }
 		 ]
@@ -278,28 +277,49 @@
 	 var myBarChart = new Chart(ctx, {
 	     type: 'bar',
 	     data: {
-		 labels: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", ">10",], // VALUES
+		 labels: [$chart_raw_skip_hist_labels],
 		 datasets: [
 		     {
 			 label: "Num pairs with this skip value",
-			 backgroundColor: [
-			     // VALUES
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			 ],
-			 // VALUES
-			 data: [65, 59, 80, 81, 56, 55,
-				65, 59, 80, 81, 56, 55,],
+			 backgroundColor: [$chart_raw_skip_hist_colours],
+			 data: [$chart_raw_skip_hist_data],
+		     }
+		 ]
+	     },
+	     options: {
+		 responsive: false,
+		 scales: {
+		     xAxes: [{
+			 barPercentage: 1.0,
+			 categoryPercentage: 1.0,
+		     }],
+		     yAxes: [{
+			 ticks: {
+			     min: 0,
+			 }
+		     }],
+		 },
+		 legend:{
+		     display:false
+		 },
+	     },
+	 });
+	</script>
+
+	<h4>Raw Skip Histogram (Detail)</h4>
+	<p>Zoom in on just a few buckets from the above</p>
+	<canvas id="chart-raw-skip-hist-detail" width="1000" height="500"></canvas>
+	<script>
+	 var ctx = document.getElementById("chart-raw-skip-hist-detail");
+	 var myBarChart = new Chart(ctx, {
+	     type: 'bar',
+	     data: {
+		 labels: [$chart_raw_skip_hist_detail_labels],
+		 datasets: [
+		     {
+			 label: "Num pairs with this skip value",
+			 backgroundColor: [$chart_raw_skip_hist_detail_colours],
+			 data: [$chart_raw_skip_hist_detail_data],
 		     }
 		 ]
 	     },
@@ -326,35 +346,20 @@
 	<h4>Used Skip Histogram</h4>
 	<p>Histogram of used inter-detection skip values: counts all skip values
 	    between pairs of detections that were actually used to join tracks</p>
-	<p>(Average skip value used: 0.75)</p> <!-- VALUE -->
+	<p>(Average skip value used: $average_used_skip)</p>
 	<canvas id="chart-used-skip-hist" width="1000" height="500"></canvas>
 	<script>
 	 var ctx = document.getElementById("chart-used-skip-hist");
 	 var myBarChart = new Chart(ctx, {
 	     type: 'bar',
 	     data: {
-		 labels: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", ">10",], // VALUES
+		 labels: [$chart_used_skip_hist_labels], // VALUES
 		 datasets: [
 		     {
 			 label: "Num pairs with this skip value",
-			 backgroundColor: [
-			     // VALUES
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			 ],
+			 backgroundColor: [$chart_used_skip_hist_colours],
 			 // VALUES
-			 data: [65, 59, 80, 81, 56, 55,
-				65, 59, 80, 81, 56, 55,],
+			 data: [$chart_used_skip_hist_data],
 		     }
 		 ]
 	     },
@@ -381,35 +386,19 @@
 	<h4>Stabilization Feature Points</h4>
 	<p>Histogram of number of feature points found for inter-frame
 	stabilization.</p>
-	<p>(Average number of feature points: 0.75)</p> <!-- VALUE -->
+	<p>(Average number of feature points: $average_num_fp)</p>
 	<canvas id="chart-num-fp-hist" width="1000" height="500"></canvas>
 	<script>
 	 var ctx = document.getElementById("chart-num-fp-hist");
 	 var myBarChart = new Chart(ctx, {
 	     type: 'bar',
 	     data: {
-		 labels: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", ">10",], // VALUES
+		 labels: [$chart_num_fp_hist_labels],
 		 datasets: [
 		     {
 			 label: "Num frames with this many feature points",
-			 backgroundColor: [
-			     // VALUES
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			 ],
-			 // VALUES
-			 data: [65, 59, 80, 81, 56, 55,
-				65, 59, 80, 81, 56, 55,],
+			 backgroundColor: [$chart_num_fp_hist_colours],
+			 data: [$chart_num_fp_hist_data],
 		     }
 		 ]
 	     },
@@ -436,35 +425,19 @@
 	<h4>Stabilization Tracked Feature Points</h4>
 	<p>Histogram of number of feature points successfully tracked for
 	    inter-frame stabilization.</p>
-	<p>(Average number of tracked feature points: 0.75)</p> <!-- VALUE -->
+	<p>(Average number of tracked feature points: $average_num_tracked_fp)</p>
 	<canvas id="chart-num-tracked-fp-hist" width="1000" height="500"></canvas>
 	<script>
 	 var ctx = document.getElementById("chart-num-tracked-fp-hist");
 	 var myBarChart = new Chart(ctx, {
 	     type: 'bar',
 	     data: {
-		 labels: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", ">10",], // VALUES
+		 labels: [$chart_num_tracked_fp_hist_labels],
 		 datasets: [
 		     {
 			 label: "Num frames with this many tracked feature points",
-			 backgroundColor: [
-			     // VALUES
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			 ],
-			 // VALUES
-			 data: [65, 59, 80, 81, 56, 55,
-				65, 59, 80, 81, 56, 55,],
+			 backgroundColor: [$chart_num_tracked_fp_hist_colours],
+			 data: [$chart_num_tracked_fp_hist_data],
 		     }
 		 ]
 	     },
@@ -490,35 +463,19 @@
 
 	<h4>Raw Detection Size</h4>
 	<p>Histogram of frame height of all face detections.</p>
-	<p>(Average height: 0.75)</p> <!-- VALUE -->
+	<p>(Average height: $average_raw_height)</p>
 	<canvas id="chart-raw-height-hist" width="1000" height="500"></canvas>
 	<script>
 	 var ctx = document.getElementById("chart-raw-height-hist");
 	 var myBarChart = new Chart(ctx, {
 	     type: 'bar',
 	     data: {
-		 labels: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", ">10",], // VALUES
+		 labels: [$chart_raw_height_hist_labels],
 		 datasets: [
 		     {
 			 label: "Num detections with this height",
-			 backgroundColor: [
-			     // VALUES
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			 ],
-			 // VALUES
-			 data: [65, 59, 80, 81, 56, 55,
-				65, 59, 80, 81, 56, 55,],
+			 backgroundColor: [$chart_raw_height_hist_colours],
+			 data: [$chart_raw_height_hist_data],
 		     }
 		 ]
 	     },
@@ -545,35 +502,19 @@
 	<h4>Used Detection Size</h4>
 	<p>Histogram of frame height of face detections which actually made it
 	to output.</p>
-	<p>(Average height: 0.75)</p> <!-- VALUE -->
+	<p>(Average height: $average_used_height)</p>
 	<canvas id="chart-used-height-hist" width="1000" height="500"></canvas>
 	<script>
 	 var ctx = document.getElementById("chart-used-height-hist");
 	 var myBarChart = new Chart(ctx, {
 	     type: 'bar',
 	     data: {
-		 labels: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", ">10",], // VALUES
+		 labels: [$chart_used_height_hist_labels],
 		 datasets: [
 		     {
 			 label: "Num detections with this height",
-			 backgroundColor: [
-			     // VALUES
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			 ],
-			 // VALUES
-			 data: [65, 59, 80, 81, 56, 55,
-				65, 59, 80, 81, 56, 55,],
+			 backgroundColor: [$chart_used_height_hist_colours],
+			 data: [$chart_used_height_hist_data],
 		     }
 		 ]
 	     },
@@ -614,7 +555,11 @@
 		 ],
 		 datasets: [
 		     {
-			 data: [35, 3, 7], // VALUE
+			 data: [
+			     $kept_tracks,
+			     $dropped_tracks,
+			     $truncated_tracks
+			 ],
 			 backgroundColor: [
 			     "#00FF00",
 			     "#FF0000",
@@ -626,7 +571,7 @@
 		 responsive: false,
 	     },
 	 });
-	</script>	
+	</script>
 
 	<h4>Track Drop Breakdown</h4>
 	<p>For what reason are tracks dropped?</p>
@@ -648,7 +593,16 @@
 		 ],
 		 datasets: [
 		     {
-			 data: [1,2,3,4,5,6,7,8], // VALUE
+			 data: [
+			     $drop_because_low_frame_count,
+			     $drop_because_low_total_detections,
+			     $drop_because_expanded_bb_too_big,
+			     $drop_because_optical_flow_bb_too_big,
+			     $drop_because_no_feature_points,
+			     $drop_because_failed_optical_flow,
+			     $drop_because_no_rigid_transform,
+			     $drop_because_stabilized_bb_too_big,
+			 ],
 			 backgroundColor: [
 			     'rgba(255, 0, 0, 1)',
 			     'rgba(0, 255, 0, 1)',
@@ -665,7 +619,7 @@
 		 responsive: false,
 	     },
 	 });
-	</script>	
+	</script>
 
 	<h4>Track Drop Breakdown (Detail)</h4>
 	<p>For what reason are tracks dropped (excluding low frame count)?</p>
@@ -686,7 +640,15 @@
 		 ],
 		 datasets: [
 		     {
-			 data: [2,3,4,5,6,7,8], // VALUE
+			 data: [
+			     $drop_because_low_total_detections,
+			     $drop_because_expanded_bb_too_big,
+			     $drop_because_optical_flow_bb_too_big,
+			     $drop_because_no_feature_points,
+			     $drop_because_failed_optical_flow,
+			     $drop_because_no_rigid_transform,
+			     $drop_because_stabilized_bb_too_big,
+			 ],
 			 backgroundColor: [
 			     'rgba(0, 255, 0, 1)',
 			     'rgba(54, 162, 235, 1)',
@@ -702,7 +664,7 @@
 		 responsive: false,
 	     },
 	 });
-	</script>	
+	</script>
 
 	<h4>Track Truncate Breakdown</h4>
 	<p>For what reason are tracks truncated?</p>
@@ -721,7 +683,13 @@
 		 ],
 		 datasets: [
 		     {
-			 data: [4,5,6,7,8], // VALUE
+			 data: [
+			     $truncate_because_optical_flow_bb_too_big,
+			     $truncate_because_no_feature_points,
+			     $truncate_because_failed_optical_flow,
+			     $truncate_because_no_rigid_transform,
+			     $truncate_because_stabilized_bb_too_big,
+			 ],
 			 backgroundColor: [
 			     'rgba(255, 206, 86, 1)',
 			     'rgba(255, 99, 132, 1)',
@@ -735,7 +703,37 @@
 		 responsive: false,
 	     },
 	 });
-	</script>	
+	</script>
+
+	<h4>Track Interpolation Breakdown</h4>
+	<p>What fraction of final tracks have at least one interpolated frame?</p>
+	<canvas id="chart-interpolation-breakdown" width="500" height="500"></canvas>
+	<script>
+	 var ctx = document.getElementById("chart-interpolation-breakdown");
+	 var myPieChart = new Chart(ctx,{
+	     type: 'pie',
+	     data: {
+		 labels: [
+		     "Interpolation",
+		     "No Interpolation",
+		 ],
+		 datasets: [
+		     {
+			 data: [
+			     $tracks_with_interpolation,
+			     $tracks_without_interpolation,
+			 ],
+			 backgroundColor: [
+			     'rgba(0, 255, 0, 1)',
+			     'rgba(255, 0, 0, 1)',
+			 ],
+		     }]
+	     },
+	     options: {
+		 responsive: false,
+	     },
+	 });
+	</script>
 
 	<h4>Raw Track Length</h4>
 	<p>Histogram of track length of all face tracks.</p>
@@ -745,28 +743,12 @@
 	 var myBarChart = new Chart(ctx, {
 	     type: 'bar',
 	     data: {
-		 labels: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", ">10",], // VALUES
+		 labels: [$chart_raw_track_len_hist_labels],
 		 datasets: [
 		     {
 			 label: "Num tracks with this length",
-			 backgroundColor: [
-			     // VALUES
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			 ],
-			 // VALUES
-			 data: [65, 59, 80, 81, 56, 55,
-				65, 59, 80, 81, 56, 55,],
+			 backgroundColor: [$chart_raw_track_len_hist_colours],
+			 data: [$chart_raw_track_len_hist_data],
 		     }
 		 ]
 	     },
@@ -793,35 +775,19 @@
 	<h4>Used Track Length</h4>
 	<p>Histogram of track length of all face tracks which actually made it
 	to output</p>
-	<p>(Average length: 25.4)</p> <!-- VALUE -->
+	<p>(Average length: $average_used_track_len)</p>
 	<canvas id="chart-used-track-len-hist" width="1000" height="500"></canvas>
 	<script>
 	 var ctx = document.getElementById("chart-used-track-len-hist");
 	 var myBarChart = new Chart(ctx, {
 	     type: 'bar',
 	     data: {
-		 labels: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", ">10",], // VALUES
+		 labels: [$chart_used_track_len_hist_labels],
 		 datasets: [
 		     {
 			 label: "Num tracks with this length",
-			 backgroundColor: [
-			     // VALUES
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			     'rgba(0, 204, 255, 1.0)',
-			 ],
-			 // VALUES
-			 data: [65, 59, 80, 81, 56, 55,
-				65, 59, 80, 81, 56, 55,],
+			 backgroundColor: [$chart_used_track_len_hist_colours],
+			 data: [$chart_used_track_len_hist_data],
 		     }
 		 ]
 	     },
@@ -846,36 +812,8 @@
 	</script>
 
 	<h1>Invokation Parameters</h1>
-	<pre><code> <!-- VALUE -->
-{'bounding_box_scaling_factor': 1.0,
- 'classifier_config_file': 'haarcascades/haarcascade_frontalface_alt2.xml',
- 'classifier_flags': 1,
- 'classifier_max_size_factor': 1.0,
- 'classifier_min_neighbors': 4,
- 'classifier_min_size': 32,
- 'classifier_scale_factor': 1.1,
- 'feature_track_block_size': 10,
- 'feature_track_max_corners': 1000,
- 'feature_track_min_distance': 8,
- 'feature_track_quality_level': 0.01,
- 'hst_jaccard_bin_size': 0.01,
- 'hst_time_bin_size': 0.1,
- 'input_directory': 'gifs_lean',
- 'max_consecutive_errors': 10,
- 'max_skip': 6,
- 'min_frame_count': 20,
- 'min_jaccard': 0.6,
- 'min_total_detections': 10,
- 'opencv_data_dir': '/home/sandro/opencv-3.1.0/opencv-3.1.0/data/',
- 'optical_flow_criteria': (3, 10, 0.03),
- 'optical_flow_max_level': 2,
- 'optical_flow_win_size': 19,
- 'output_directory': 'omg',
- 'resize_interpolation_method': 1,
- 'target_height': 256,
- 'target_width': 256,
- 'update_frequency': 15.0,
- 'visualization_directory': 'debug'}
+	<pre><code>
+$invokation_parameters
 	</code></pre>
     </body>
 </html>

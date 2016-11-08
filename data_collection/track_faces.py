@@ -35,7 +35,7 @@ parser.add_argument("--input_directory", required=True, help="Directory to look 
 parser.add_argument("--output_directory", required=True, help="Directory to place output")
 parser.add_argument("--visualization_directory", default="", help="Directory to place visualization output; if empty string, will skip generating this output")
 parser.add_argument("--max_consecutive_errors", type=int, default=10, help="This many consecutive errors will halt processing")
-parser.add_argument("--update_frequency", type=float, default=3.0, help="Update frequency in seconds") # should be 15.0
+parser.add_argument("--update_frequency", type=float, default=15.0, help="Update frequency in seconds")
 # Params for the Haar Cascade Classifier
 parser.add_argument("--opencv_data_dir", default="/home/sandro/opencv-3.1.0/opencv-3.1.0/data/", help="Directory from which to load classifier config file")
 parser.add_argument("--classifier_config_file", default="haarcascades/haarcascade_frontalface_alt2.xml", help="Classifier config file")
@@ -149,6 +149,8 @@ class Stats:
         self.cnt_input_files = 0
         #   Total number of processed files so far
         self.cnt_processed_files = 0
+        #   Total number of tracks with at least one interpolated frame
+        self.cnt_tracks_with_interpolation = 0
 
         # Histograms
         self.hst_skip_raw = {}
@@ -603,6 +605,8 @@ def crop_faces(cap, crop_base, stabilized_tracks, args, stats):
             inc(stats.hst_frame_height_used, d.height)
             inc(stats.hst_frame_width_used, d.width)
     inc(stats.hst_num_crops_per_video, len(stabilized_tracks))
+    stats.cnt_tracks_with_interpolation += sum(
+        [1 for t in stabilized_tracks if any([d.interpolated for d in t])])
 
     # Get min width and height for each track
     widths = [min([d.width for d in t]) for t in stabilized_tracks]
@@ -816,6 +820,169 @@ def write_stats(args, stats):
         for (lower, upper) in zip(chart_used_jaccard_hist_buckets,
                                   chart_used_jaccard_hist_buckets[1:] + [float("inf")])]
     chart_used_jaccard_hist_data = ','.join([str(v) for v in chart_used_jaccard_hist_data_values])
+    average_used_jaccard = "0.0"
+    total = sum([v for (k, v) in stats.hst_jaccard_used.iteritems()])
+    if total > 0:
+        average_used_jaccard = "%.2f" % (
+            sum([v*k for (k, v) in stats.hst_jaccard_used.iteritems()]) / total)
+
+    # chart-raw-skip-hist
+    chart_raw_skip_hist_buckets = range(26)
+    chart_raw_skip_hist_labels = ','.join(['"%s"' % v for v in chart_raw_skip_hist_buckets])
+    chart_raw_skip_hist_colours = ''.join(["'rgba(0, 204, 255, 1.0)',\n"]*len(chart_raw_skip_hist_labels))
+    chart_raw_skip_hist_data_values = [
+        sum([v for (k, v) in stats.hst_skip_raw.iteritems() if lower <= k < upper])
+        for (lower, upper) in zip(chart_raw_skip_hist_buckets,
+                                  chart_raw_skip_hist_buckets[1:] + [float("inf")])]
+    chart_raw_skip_hist_data = ','.join([str(v) for v in chart_raw_skip_hist_data_values])
+
+    # chart-raw-skip-hist
+    chart_raw_skip_hist_detail_buckets = chart_raw_skip_hist_buckets[1:11]
+    chart_raw_skip_hist_detail_labels = ','.join(['"%s"' % v for v in chart_raw_skip_hist_detail_buckets])
+    chart_raw_skip_hist_detail_colours = ''.join(["'rgba(0, 204, 255, 1.0)',\n"]*len(chart_raw_skip_hist_detail_labels))
+    chart_raw_skip_hist_detail_data_values = chart_raw_skip_hist_data_values[1:11]
+    chart_raw_skip_hist_detail_data = ','.join([str(v) for v in chart_raw_skip_hist_detail_data_values])
+
+    # chart-used-skip-hist
+    chart_used_skip_hist_buckets = range(26)
+    chart_used_skip_hist_labels = ','.join(['"%s"' % v for v in chart_used_skip_hist_buckets])
+    chart_used_skip_hist_colours = ''.join(["'rgba(0, 204, 255, 1.0)',\n"]*len(chart_used_skip_hist_labels))
+    chart_used_skip_hist_data_values = [
+        sum([v for (k, v) in stats.hst_skip_used.iteritems() if lower <= k < upper])
+        for (lower, upper) in zip(chart_used_skip_hist_buckets,
+                                  chart_used_skip_hist_buckets[1:] + [float("inf")])]
+    chart_used_skip_hist_data = ','.join([str(v) for v in chart_used_skip_hist_data_values])
+    average_used_skip = "0.0"
+    total = sum([v for (k, v) in stats.hst_skip_used.iteritems()])
+    if total > 0:
+        average_used_skip = "%.6f" % (
+            sum([v*k for (k, v) in stats.hst_skip_used.iteritems()]) / float(total))
+
+    # chart-num-fp-hist
+    chart_num_fp_hist_buckets = range(0,105,5)
+    chart_num_fp_hist_labels = ','.join(['"%s"' % v for v in chart_num_fp_hist_buckets])
+    chart_num_fp_hist_colours = ''.join(["'rgba(0, 204, 255, 1.0)',\n"]*len(chart_num_fp_hist_labels))
+    chart_num_fp_hist_data_values = [
+        sum([v for (k, v) in stats.hst_num_feature_points.iteritems() if lower <= k < upper])
+        for (lower, upper) in zip(chart_num_fp_hist_buckets,
+                                  chart_num_fp_hist_buckets[1:] + [float("inf")])]
+    chart_num_fp_hist_data = ','.join([str(v) for v in chart_num_fp_hist_data_values])
+    average_num_fp = "0.0"
+    total = sum([v for (k, v) in stats.hst_num_feature_points.iteritems()])
+    if total > 0:
+        average_num_fp = "%.1f" % (
+            sum([v*k for (k, v) in stats.hst_num_feature_points.iteritems()]) / float(total))
+
+    # chart-num-tracked-fp-hist
+    chart_num_tracked_fp_hist_buckets = range(0,105,5)
+    chart_num_tracked_fp_hist_labels = ','.join(['"%s"' % v for v in chart_num_tracked_fp_hist_buckets])
+    chart_num_tracked_fp_hist_colours = ''.join(["'rgba(0, 204, 255, 1.0)',\n"]*len(chart_num_tracked_fp_hist_labels))
+    chart_num_tracked_fp_hist_data_values = [
+        sum([v for (k, v) in stats.hst_num_tracked_feature_points.iteritems() if lower <= k < upper])
+        for (lower, upper) in zip(chart_num_tracked_fp_hist_buckets,
+                                  chart_num_tracked_fp_hist_buckets[1:] + [float("inf")])]
+    chart_num_tracked_fp_hist_data = ','.join([str(v) for v in chart_num_tracked_fp_hist_data_values])
+    average_num_tracked_fp = "0.0"
+    total = sum([v for (k, v) in stats.hst_num_tracked_feature_points.iteritems()])
+    if total > 0:
+        average_num_tracked_fp = "%.1f" % (
+            sum([v*k for (k, v) in stats.hst_num_tracked_feature_points.iteritems()]) / float(total))
+
+    # chart-raw-height-hist
+    chart_raw_height_hist_buckets = range(20, 270, 10)
+    chart_raw_height_hist_labels = ','.join(['"%s"' % v for v in chart_raw_height_hist_buckets])
+    chart_raw_height_hist_colours = ''.join(["'rgba(0, 204, 255, 1.0)',\n"]*len(chart_raw_height_hist_labels))
+    chart_raw_height_hist_data_values = [
+        sum([v for (k, v) in stats.hst_frame_height_raw.iteritems() if lower <= k < upper])
+        for (lower, upper) in zip(chart_raw_height_hist_buckets,
+                                  chart_raw_height_hist_buckets[1:] + [float("inf")])]
+    chart_raw_height_hist_data = ','.join([str(v) for v in chart_raw_height_hist_data_values])
+    average_raw_height = "0"
+    total = sum([v for (k, v) in stats.hst_frame_height_raw.iteritems()])
+    if total > 0:
+        average_raw_height = "%d" % (
+            sum([v*k for (k, v) in stats.hst_frame_height_raw.iteritems()]) / total)
+
+    # chart-used-height-hist
+    chart_used_height_hist_buckets = range(20, 270, 10)
+    chart_used_height_hist_labels = ','.join(['"%s"' % v for v in chart_used_height_hist_buckets])
+    chart_used_height_hist_colours = ''.join(["'rgba(0, 204, 255, 1.0)',\n"]*len(chart_used_height_hist_labels))
+    chart_used_height_hist_data_values = [
+        sum([v for (k, v) in stats.hst_frame_height_used.iteritems() if lower <= k < upper])
+        for (lower, upper) in zip(chart_used_height_hist_buckets,
+                                  chart_used_height_hist_buckets[1:] + [float("inf")])]
+    chart_used_height_hist_data = ','.join([str(v) for v in chart_used_height_hist_data_values])
+    average_used_height = "0"
+    total = sum([v for (k, v) in stats.hst_frame_height_used.iteritems()])
+    if total > 0:
+        average_used_height = "%d" % (
+            sum([v*k for (k, v) in stats.hst_frame_height_used.iteritems()]) / total)
+
+    # chart-track-breakdown
+    truncated_tracks = (
+        stats.cnt_truncate_because_optical_flow_bb_too_big +
+        stats.cnt_truncate_because_no_feature_points +
+        stats.cnt_truncate_because_failed_optical_flow +
+        stats.cnt_truncate_because_no_rigid_transform +
+        stats.cnt_truncate_because_stabilized_bb_too_big)
+    dropped_tracks = (
+        stats.cnt_drop_because_low_frame_count +
+        stats.cnt_drop_because_low_total_detections +
+        stats.cnt_drop_because_expanded_bb_too_big +
+        stats.cnt_drop_because_optical_flow_bb_too_big +
+        stats.cnt_drop_because_no_feature_points +
+        stats.cnt_drop_because_failed_optical_flow +
+        stats.cnt_drop_because_no_rigid_transform +
+        stats.cnt_drop_because_stabilized_bb_too_big)
+    kept_tracks = stats.cnt_final_tracks - truncated_tracks
+
+    # chart-drop-breakdown and chart-drop-breakdown-detail
+    drop_because_low_frame_count = stats.cnt_drop_because_low_frame_count
+    drop_because_low_total_detections = stats.cnt_drop_because_low_total_detections
+    drop_because_expanded_bb_too_big = stats.cnt_drop_because_expanded_bb_too_big
+    drop_because_optical_flow_bb_too_big = stats.cnt_drop_because_optical_flow_bb_too_big
+    drop_because_no_feature_points = stats.cnt_drop_because_no_feature_points
+    drop_because_failed_optical_flow = stats.cnt_drop_because_failed_optical_flow
+    drop_because_no_rigid_transform = stats.cnt_drop_because_no_rigid_transform
+    drop_because_stabilized_bb_too_big = stats.cnt_drop_because_stabilized_bb_too_big
+
+    # chart-truncate-breakdown
+    truncate_because_optical_flow_bb_too_big = stats.cnt_truncate_because_optical_flow_bb_too_big
+    truncate_because_no_feature_points = stats.cnt_truncate_because_no_feature_points
+    truncate_because_failed_optical_flow = stats.cnt_truncate_because_failed_optical_flow
+    truncate_because_no_rigid_transform = stats.cnt_truncate_because_no_rigid_transform
+    truncate_because_stabilized_bb_too_big = stats.cnt_truncate_because_stabilized_bb_too_big
+
+    # chart-interpolation-breakdown
+    tracks_with_interpolation = stats.cnt_tracks_with_interpolation
+    tracks_without_interpolation = stats.cnt_final_tracks - tracks_with_interpolation
+
+    # chart-raw-track-len-hist
+    chart_raw_track_len_hist_buckets = range(25) + range(25, 50, 5) + range(50, 250, 25)
+    chart_raw_track_len_hist_labels = ','.join(['"%s"' % v for v in chart_raw_track_len_hist_buckets])
+    chart_raw_track_len_hist_colours = ''.join(["'rgba(0, 204, 255, 1.0)',\n"]*len(chart_raw_track_len_hist_labels))
+    chart_raw_track_len_hist_data_values = [
+        sum([v for (k, v) in stats.hst_track_len_raw.iteritems() if lower <= k < upper])
+        for (lower, upper) in zip(chart_raw_track_len_hist_buckets,
+                                  chart_raw_track_len_hist_buckets[1:] + [float("inf")])]
+    chart_raw_track_len_hist_data = ','.join([str(v) for v in chart_raw_track_len_hist_data_values])
+
+    # chart-used-track-len-hist
+    chart_used_track_len_hist_buckets = range(20,50) + range(50, 250, 25)
+    chart_used_track_len_hist_labels = ','.join(['"%s"' % v for v in chart_used_track_len_hist_buckets])
+    chart_used_track_len_hist_colours = ''.join(["'rgba(0, 204, 255, 1.0)',\n"]*len(chart_used_track_len_hist_labels))
+    chart_used_track_len_hist_data_values = [
+        sum([v for (k, v) in stats.hst_track_len_used.iteritems() if lower <= k < upper])
+        for (lower, upper) in zip(chart_used_track_len_hist_buckets,
+                                  chart_used_track_len_hist_buckets[1:] + [float("inf")])]
+    chart_used_track_len_hist_data = ','.join([str(v) for v in chart_used_track_len_hist_data_values])
+    total = sum([v for (k, v) in stats.hst_track_len_used.iteritems()])
+    average_used_track_len = "0.0"
+    if total > 0:
+        average_used_track_len = "%.1f" % (
+            sum([v*k for (k, v) in stats.hst_track_len_used.iteritems()]) / float(total))
+
+    invokation_parameters = pprint.pformat(args.__dict__)
 
     # Fill in the template and write it out to file
     graph_html = template.substitute(**locals())
