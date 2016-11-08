@@ -24,6 +24,8 @@ import argparse
 import copy
 import time
 import pprint
+from string import Template
+import webbrowser
 
 
 # Params for algorithm
@@ -33,7 +35,7 @@ parser.add_argument("--input_directory", required=True, help="Directory to look 
 parser.add_argument("--output_directory", required=True, help="Directory to place output")
 parser.add_argument("--visualization_directory", default="", help="Directory to place visualization output; if empty string, will skip generating this output")
 parser.add_argument("--max_consecutive_errors", type=int, default=10, help="This many consecutive errors will halt processing")
-parser.add_argument("--update_frequency", type=float, default=15.0, help="Update frequency in seconds")
+parser.add_argument("--update_frequency", type=float, default=3.0, help="Update frequency in seconds") # should be 15.0
 # Params for the Haar Cascade Classifier
 parser.add_argument("--opencv_data_dir", default="/home/sandro/opencv-3.1.0/opencv-3.1.0/data/", help="Directory from which to load classifier config file")
 parser.add_argument("--classifier_config_file", default="haarcascades/haarcascade_frontalface_alt2.xml", help="Classifier config file")
@@ -149,8 +151,6 @@ class Stats:
         self.cnt_processed_files = 0
 
         # Histograms
-        self.hst_frame_count = {}
-        self.hst_total_detections = {}
         self.hst_skip_raw = {}
         self.hst_skip_used = {}
         self.hst_jaccard_raw = {}
@@ -164,7 +164,10 @@ class Stats:
         self.hst_frame_width_raw = {}
         self.hst_frame_height_used = {}
         self.hst_frame_width_used = {}
+        self.hst_num_crops_per_video = {}
 
+        self.start_time = 0
+        self.start_time_str = ""
 
 # Main function to process a gif
 def process(f, args, stats):
@@ -266,9 +269,10 @@ def get_initial_tracks(cap, args, stats):
                 previous = track[-1]
                 j = jaccard_index(current, previous)
                 skip = frame_number - previous.frame_number - 1
-                if j > 0:
+                if j > 0 and skip <= args.max_skip:
                     jaccard_bin = round(j / args.hst_jaccard_bin_size) * args.hst_jaccard_bin_size
                     inc(stats.hst_jaccard_raw, jaccard_bin)
+                if j >= args.min_jaccard:
                     inc(stats.hst_skip_raw, skip)
                 if j >= args.min_jaccard and skip <= args.max_skip:
                     scored_matches.append( (j, (current, track, skip)) )
@@ -330,8 +334,6 @@ def discard_invalid_tracks(tracks, args, stats):
             continue
 
         # Otherwise keep this track
-        inc(stats.hst_frame_count, frame_count)
-        inc(stats.hst_total_detections, num_detections)
         valid_tracks.append(copy.deepcopy(track))
     return (valid_tracks, untracked_detections)
 
@@ -600,6 +602,7 @@ def crop_faces(cap, crop_base, stabilized_tracks, args, stats):
         for d in t:
             inc(stats.hst_frame_height_used, d.height)
             inc(stats.hst_frame_width_used, d.width)
+    inc(stats.hst_num_crops_per_video, len(stabilized_tracks))
 
     # Get min width and height for each track
     widths = [min([d.width for d in t]) for t in stabilized_tracks]
@@ -723,6 +726,106 @@ def generate_visualization(cap, viz_file, stabilized_tracks, expanded_tracks,
     out.release()
 
 
+# Write out the text and html stats
+def write_stats(args, stats):
+    # Write the .txt stats
+    with open(os.path.join(args.output_directory, "stats.txt"), 'w') as f:
+        f.write(pprint.pformat(stats.__dict__))
+
+    # Write the .html stats
+
+    # Read the template
+    with open("graph_template.html", 'r') as f:
+        template = Template(f.read())
+
+    # Compute the values to fill in
+
+    # Basic progress
+    files_processed = stats.cnt_processed_files + stats.cnt_errors
+    input_files = stats.cnt_input_files
+    progress_percent = 0.0
+    if stats.cnt_input_files > 0:
+        progress_percent = "%.2f" % (100.0 * float(files_processed) /
+                                     float(stats.cnt_input_files))
+    total_faces = stats.cnt_final_tracks
+    faces_per_gif_value = 0.0
+    if files_processed > 0:
+        faces_per_gif_value = (float(stats.cnt_final_tracks) /
+                               float(files_processed))
+    faces_per_gif = "%.2f" % faces_per_gif_value
+    faces_at_completion = int(round(faces_per_gif_value * stats.cnt_input_files))
+    start_time = stats.start_time_str
+    time_per_gif = "0"
+    if files_processed > 0:
+        time_per_gif = "%.2f" % ((time.time() - stats.start_time) / files_processed)
+    files_done = files_processed
+    files_left = stats.cnt_input_files - files_processed
+    time_remaining = "calculating..."
+    if files_processed > 0:
+        time_remaining_value = (time.time() - stats.start_time) * files_left / files_processed
+        days = int(time_remaining_value / (60*60*24))
+        hours = int(time_remaining_value / (60*60)) - days*24
+        minutes = int(time_remaining_value / 60) - days*24*60 - hours*60
+        seconds = int(time_remaining_value) - days*24*60*60 - hours*60*60 - minutes*60
+        time_remaining = "%d day(s) %d hour(s) %d minute(s) %d second(s)" % (
+            days, hours, minutes, seconds)
+    success = stats.cnt_processed_files
+    error = stats.cnt_errors
+
+    # chart-time-hist
+    chart_time_hist_buckets = [x/2.0 for x in range(0, 20, 1)] + [10, 15, 20, 25, 30, 45, 60]
+    chart_time_hist_labels = ','.join(['"%s"' % v for v in chart_time_hist_buckets])
+    chart_time_hist_colours = ''.join(["'rgba(0, 204, 255, 1.0)',\n"]*len(chart_time_hist_labels))
+    chart_time_hist_data_values = [
+        sum([v for (k, v) in stats.hst_time.iteritems() if lower <= k < upper])
+        for (lower, upper) in zip(chart_time_hist_buckets,
+                                  chart_time_hist_buckets[1:] + [float("inf")])]
+    chart_time_hist_data = ','.join([str(v) for v in chart_time_hist_data_values])
+
+    # chart-num-faces-hist
+    chart_num_faces_hist_buckets = range(21)
+    chart_num_faces_hist_labels = ','.join(['"%s"' % v for v in chart_num_faces_hist_buckets])
+    chart_num_faces_hist_colours = ''.join(["'rgba(0, 204, 255, 1.0)',\n"]*len(chart_num_faces_hist_labels))
+    chart_num_faces_hist_data_values = [
+        sum([v for (k, v) in stats.hst_num_crops_per_video.iteritems() if lower <= k < upper])
+        for (lower, upper) in zip(chart_num_faces_hist_buckets,
+                                  chart_num_faces_hist_buckets[1:] + [float("inf")])]
+    chart_num_faces_hist_data = ','.join([str(v) for v in chart_num_faces_hist_data_values])
+
+    # chart-detection-breakdown
+    interpolated_detections = stats.cnt_detections_written - stats.cnt_detections_kept
+    kept_detections = stats.cnt_detections_kept
+    dropped_detections = stats.cnt_total_detections - stats.cnt_detections_kept
+
+    # chart-raw-jaccard-hist
+    chart_raw_jaccard_hist_buckets = [x/100.0 for x in range(0, 100, 5)]
+    chart_raw_jaccard_hist_labels = ','.join(['"%s"' % v for v in chart_raw_jaccard_hist_buckets])
+    chart_raw_jaccard_hist_colours = ''.join(["'rgba(0, 204, 255, 1.0)',\n"]*len(chart_raw_jaccard_hist_labels))
+    chart_raw_jaccard_hist_data_values = [
+        sum([v for (k, v) in stats.hst_jaccard_raw.iteritems() if lower <= k < upper])
+        for (lower, upper) in zip(chart_raw_jaccard_hist_buckets,
+                                  chart_raw_jaccard_hist_buckets[1:] + [float("inf")])]
+    chart_raw_jaccard_hist_data = ','.join([str(v) for v in chart_raw_jaccard_hist_data_values])
+
+    # chart-used-jaccard-hist
+    chart_used_jaccard_hist_buckets = [x/100.0 for x in range(0, 100, 5)]
+    chart_used_jaccard_hist_labels = ','.join(['"%s"' % v for v in chart_used_jaccard_hist_buckets])
+    chart_used_jaccard_hist_colours = ''.join(["'rgba(0, 204, 255, 1.0)',\n"]*len(chart_used_jaccard_hist_labels))
+    chart_used_jaccard_hist_data_values = [
+        sum([v for (k, v) in stats.hst_jaccard_used.iteritems() if lower <= k < upper])
+        for (lower, upper) in zip(chart_used_jaccard_hist_buckets,
+                                  chart_used_jaccard_hist_buckets[1:] + [float("inf")])]
+    chart_used_jaccard_hist_data = ','.join([str(v) for v in chart_used_jaccard_hist_data_values])
+
+    # Fill in the template and write it out to file
+    graph_html = template.substitute(**locals())
+    graph_file = os.path.join(args.output_directory, "stats.html")
+    with open(graph_file, 'w') as f:
+        f.write(graph_html)
+
+    return graph_file
+
+
 # Helper functions
 
 
@@ -777,6 +880,8 @@ def same_size_crop(inpt, target):
 def main():
     args = parser.parse_args()
     stats = Stats()
+    stats.start_time_str = time.strftime("%Y-%m-%d %H:%M:%S")
+    stats.start_time = time.time()
 
     # Make output directory/directories
     if not os.path.exists(args.output_directory):
@@ -793,7 +898,13 @@ def main():
     files = [f for f in files if os.path.splitext(f)[1] == ".mp4"]
     stats.cnt_input_files = len(files)
     consecutive_errors = 0
+
+    # Write the first update
+    html_location = write_stats(args, stats)
     last_update = time.time()
+    print "Live status available at:", html_location
+    webbrowser.open(html_location)
+
     for f in files:
         try:
             process(f, args, stats)
@@ -809,13 +920,11 @@ def main():
                 break
         # Write out stats at regular intervals
         if time.time() - last_update >= args.update_frequency:
-            with open(os.path.join(args.output_directory, "stats.txt"), 'w') as f:
-                f.write(pprint.pformat(stats.__dict__))
+            write_stats(args, stats)
             last_update = time.time()
 
     # Do one last update before we exit
-    with open(os.path.join(args.output_directory, "stats.txt"), 'w') as f:
-        f.write(pprint.pformat(stats.__dict__))
+    write_stats(args, stats)
 
 
 if __name__ == "__main__":
