@@ -732,8 +732,17 @@ def generate_visualization(cap, viz_file, stabilized_tracks, expanded_tracks,
 
 # Write out the text and html stats
 def write_stats(args, stats):
+    text_output = os.path.join(args.output_directory, "stats.txt")
+    html_output = os.path.join(args.output_directory, "stats.html")
+
+    write_stats_to_files(args, stats, text_output, html_output)
+    return html_output
+
+
+# Write out the text and html stats
+def write_stats_to_files(args, stats, text_output, html_output):
     # Write the .txt stats
-    with open(os.path.join(args.output_directory, "stats.txt"), 'w') as f:
+    with open(text_output, 'w') as f:
         f.write(pprint.pformat(stats.__dict__))
 
     # Write the .html stats
@@ -983,11 +992,8 @@ def write_stats(args, stats):
 
     # Fill in the template and write it out to file
     graph_html = template.substitute(**locals())
-    graph_file = os.path.join(args.output_directory, "stats.html")
-    with open(graph_file, 'w') as f:
+    with open(html_output, 'w') as f:
         f.write(graph_html)
-
-    return graph_file
 
 
 # Helper functions
