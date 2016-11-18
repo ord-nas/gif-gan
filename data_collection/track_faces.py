@@ -37,7 +37,7 @@ parser.add_argument("--visualization_directory", default="", help="Directory to 
 parser.add_argument("--max_consecutive_errors", type=int, default=10, help="This many consecutive errors will halt processing")
 parser.add_argument("--update_frequency", type=float, default=15.0, help="Update frequency in seconds")
 # Params for the Haar Cascade Classifier
-parser.add_argument("--opencv_data_dir", default="/home/sandro/opencv-3.1.0/opencv-3.1.0/data/", help="Directory from which to load classifier config file")
+parser.add_argument("--opencv_data_dir", default="./opencv-3.1.0/data/", help="Directory from which to load classifier config file")
 parser.add_argument("--classifier_config_file", default="haarcascades/haarcascade_frontalface_alt2.xml", help="Classifier config file")
 parser.add_argument("--classifier_scale_factor", type=float, default=1.1, help="cc.detectMultiScale(scaleFactor)")
 parser.add_argument("--classifier_min_neighbors", type=int, default=4, help="cc.detectMultiScale(minNeighbors)")
@@ -239,7 +239,7 @@ def process(f, args, stats):
 #  - frame_size, the (width, height) of the frames in f
 def get_initial_tracks(cap, args, stats):
     # Initialize the classifier
-    config = os.path.join(args.opencv_data_dir, args.classifier_config_file)
+    config = os.path.abspath(os.path.join(args.opencv_data_dir, args.classifier_config_file))
     cc = cv2.CascadeClassifier(config)
 
     tracks = []

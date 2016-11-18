@@ -121,7 +121,10 @@ keyword_list = []
 keyword_file = open("./keywords.txt")
 begin_parse = False
 for line in keyword_file:
-    k = line[:-1] # get rid of newline
+    if (line[-1] == '\n'):
+        k = line[:-1] # get rid of newline
+    else:
+        k = line
     if (k == "# keywords not tried yet"):
         begin_parse = True
         continue
@@ -161,7 +164,7 @@ for keyword in keyword_list:
         time.sleep(0.1)
     for thread in thread_list:
         thread.join()
-    print "    New videso obtained for keyword %s = %d" % (keyword, keyword_counter)
+    print "    New videos obtained for keyword %s = %d" % (keyword, keyword_counter)
 
 print "\nTotal new vidoes obtained = %d" % new_counter
 print "Current dataset size = %d" % total_counter
