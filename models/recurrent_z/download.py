@@ -21,6 +21,8 @@ from six.moves import urllib
 parser = argparse.ArgumentParser(description='Download dataset for DCGAN.')
 parser.add_argument('datasets', metavar='N', type=str, nargs='+', choices=['celebA', 'lsun', 'mnist'],
                    help='name of dataset to download [celebA, lsun, mnist]')
+parser.add_argument('--data_dir', default='./data',
+                    help='name of directory to store the data')
 
 def download(url, dirpath):
     filename = url.split('/')[-1]
@@ -134,8 +136,8 @@ if __name__ == '__main__':
     prepare_data_dir()
 
     if 'celebA' in args.datasets:
-        download_celeb_a('./data')
+        download_celeb_a(args.data_dir)
     if 'lsun' in args.datasets:
-        download_lsun('./data')
+        download_lsun(args.data_dir)
     if 'mnist' in args.datasets:
-        download_mnist('./data')
+        download_mnist(args.data_dir)
