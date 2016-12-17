@@ -19,9 +19,13 @@ flags.DEFINE_integer("c_dim", 3, "Dimension of image color. [3]")
 flags.DEFINE_string("dataset", "celebA", "The name of dataset [celebA, mnist, lsun]")
 flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
 flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image samples [samples]")
+flags.DEFINE_string("data_dir", "./data", "Directory to read dataset from")
+flags.DEFINE_string("log_dir", "./logs", "Directory to write log files")
+flags.DEFINE_string("image_glob", "*.jpg", "Glob to use to find images in the dataset directory")
 flags.DEFINE_boolean("is_train", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("is_crop", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
+flags.DEFINE_boolean("shuffle", False, "True to shuffle the dataset, False otherwise [False]")
 FLAGS = flags.FLAGS
 
 def main(_):
@@ -35,10 +39,12 @@ def main(_):
     with tf.Session() as sess:
         if FLAGS.dataset == 'mnist':
             dcgan = DCGAN(sess, image_size=FLAGS.image_size, batch_size=FLAGS.batch_size, y_dim=10, output_size=28, c_dim=1,
-                    dataset_name=FLAGS.dataset, is_crop=FLAGS.is_crop, checkpoint_dir=FLAGS.checkpoint_dir, sample_dir=FLAGS.sample_dir)
+                          dataset_name=FLAGS.dataset, is_crop=FLAGS.is_crop, checkpoint_dir=FLAGS.checkpoint_dir, sample_dir=FLAGS.sample_dir,
+                          data_dir=FLAGS.data_dir, log_dir=FLAGS.log_dir, image_glob=FLAGS.image_glob, shuffle=FLAGS.shuffle)
         else:
             dcgan = DCGAN(sess, image_size=FLAGS.image_size, batch_size=FLAGS.batch_size, output_size=FLAGS.output_size, c_dim=FLAGS.c_dim,
-                    dataset_name=FLAGS.dataset, is_crop=FLAGS.is_crop, checkpoint_dir=FLAGS.checkpoint_dir, sample_dir=FLAGS.sample_dir)
+                          dataset_name=FLAGS.dataset, is_crop=FLAGS.is_crop, checkpoint_dir=FLAGS.checkpoint_dir, sample_dir=FLAGS.sample_dir,
+                          data_dir=FLAGS.data_dir, log_dir=FLAGS.log_dir, image_glob=FLAGS.image_glob, shuffle=FLAGS.shuffle)
 
         if FLAGS.is_train:
             dcgan.train(FLAGS)

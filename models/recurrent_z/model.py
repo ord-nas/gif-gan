@@ -14,7 +14,8 @@ class DCGAN(object):
                  batch_size=64, sample_size = 64, output_size=64,
                  y_dim=None, z_dim=100, gf_dim=64, df_dim=64,
                  gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='default',
-                 checkpoint_dir=None, sample_dir=None):
+                 checkpoint_dir=None, sample_dir=None, data_dir='./data',
+                 log_dir='./logs', image_glob='*.jpg', shuffle=False):
         """
 
         Args:
@@ -36,6 +37,10 @@ class DCGAN(object):
         self.image_size = image_size
         self.sample_size = sample_size
         self.output_size = output_size
+        self.data_dir = data_dir
+        self.log_dir = log_dir
+        self.image_glob = image_glob
+        self.shuffle = shuffle
 
         self.y_dim = y_dim
         self.z_dim = z_dim
@@ -121,8 +126,10 @@ class DCGAN(object):
         if config.dataset == 'mnist':
             data_X, data_y = self.load_mnist()
         else:
-            data = glob(os.path.join("./data", config.dataset, "*.jpg"))
-        #np.random.shuffle(data)
+            data = glob(os.path.join(self.data_dir, config.dataset, self.image_glob))
+
+        if self.shuffle:
+            np.random.shuffle(data)
 
         d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
                           .minimize(self.d_loss, var_list=self.d_vars)
@@ -133,7 +140,7 @@ class DCGAN(object):
         self.g_sum = tf.merge_summary([self.z_sum, self.d__sum, 
             self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
         self.d_sum = tf.merge_summary([self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
-        self.writer = tf.train.SummaryWriter("./logs", self.sess.graph)
+        self.writer = tf.train.SummaryWriter(self.log_dir, self.sess.graph)
 
         sample_z = np.random.uniform(-1, 1, size=(self.sample_size , self.z_dim))
         
@@ -160,7 +167,7 @@ class DCGAN(object):
             if config.dataset == 'mnist':
                 batch_idxs = min(len(data_X), config.train_size) // config.batch_size
             else:            
-                data = glob(os.path.join("./data", config.dataset, "*.jpg"))
+                data = glob(os.path.join(self.data_dir, config.dataset, self.image_glob))
                 batch_idxs = min(len(data), config.train_size) // config.batch_size
 
             for idx in xrange(0, batch_idxs):
@@ -364,7 +371,7 @@ class DCGAN(object):
             return tf.nn.sigmoid(deconv2d(h2, [self.batch_size, s, s, self.c_dim], name='g_h3'))
 
     def load_mnist(self):
-        data_dir = os.path.join("./data", self.dataset_name)
+        data_dir = os.path.join(self.data_dir, self.dataset_name)
         
         fd = open(os.path.join(data_dir,'train-images-idx3-ubyte'))
         loaded = np.fromfile(file=fd,dtype=np.uint8)
