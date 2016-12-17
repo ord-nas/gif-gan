@@ -7,6 +7,8 @@ import os
 parser = argparse.ArgumentParser()
 parser.add_argument("--video_list", required=True, nargs='+',
                     help="One or more text files containing names of .mp4 files")
+parser.add_argument("--input_directory", required=True,
+                    help="Base input directory")
 parser.add_argument("--output_directory", required=True,
                     help="Directory to place output")
 parser.add_argument("--samples_per_video", type=int, default=1)
@@ -33,7 +35,7 @@ def sample_frames_from_video(video, num_samples):
         raise Exception("Read wrong number of frames from video: %s" % video)
     return frames
 
-def sample_frames(video_list, output_directory, samples_per_video):
+def sample_frames(video_list, input_directory, output_directory, samples_per_video):
     i = 0
     for lst in video_list:
         with open(lst, 'r') as f:
@@ -41,6 +43,7 @@ def sample_frames(video_list, output_directory, samples_per_video):
                 video = video.strip()
                 if not video:
                     continue
+                video = os.path.join(input_directory, video)
                 frames = sample_frames_from_video(
                     video, samples_per_video)
                 for frame in frames:
@@ -48,6 +51,8 @@ def sample_frames(video_list, output_directory, samples_per_video):
                                                ("%07d.png" % i))
                     cv2.imwrite(output_name, frame)
                     i += 1
+                    if i % 1000 == 0:
+                        print "Created %d images sofar ..." % i
 
 def main():
     args = parser.parse_args()
@@ -58,6 +63,7 @@ def main():
         os.makedirs(args.output_directory)
     
     sample_frames(args.video_list,
+                  args.input_directory,
                   args.output_directory,
                   args.samples_per_video)
 
