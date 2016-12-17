@@ -65,6 +65,7 @@ black+people
 asian+people
 latino+people
 indian+people
+chinese+people
 man
 woman
 guy
@@ -72,9 +73,46 @@ girl
 kanye+west
 kardashian
 drake
-
-# keywords not tried yet
 harry+potter
 emma+watson
+speak
+audrey+hepburn
+jennifer+lawrence
+anne+hathaway
+halle+berry
+gabrielle+union
+brad+pitt
+angelina+jolie
+michael+jackson
+eminem
+jennifer+lopez
+leonardo+diCaprio
+rihanna
+will+smith
+george+clooney
+tom+cruise
+sandra+bullock
+matt+damon
+emma+stone
+kevin+durant
+lebron+james
+michael+jordan
+kobe+bryant
+stephen+curry
+kevin+hart
+stephen+colbert
+jon+stewart
+seth+meyers
+jimmy+fallon
+jimmy+kimmel
+ellen
+robert+downey
+ben+affleck
+george+bush
+queen
+king
+queen
+king
 
-
+# keywords not tried yet
+sean+bean
