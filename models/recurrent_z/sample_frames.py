@@ -13,6 +13,7 @@ parser.add_argument("--output_directory", required=True,
                     help="Directory to place output")
 parser.add_argument("--samples_per_video", type=int, default=1)
 parser.add_argument("--random_seed", type=int, default=0)
+parser.add_argument("--output_size", type=int, default=64)
 
 
 def sample_frames_from_video(video, num_samples):
@@ -35,7 +36,7 @@ def sample_frames_from_video(video, num_samples):
         raise Exception("Read wrong number of frames from video: %s" % video)
     return frames
 
-def sample_frames(video_list, input_directory, output_directory, samples_per_video):
+def sample_frames(video_list, input_directory, output_directory, samples_per_video, size):
     i = 0
     for lst in video_list:
         with open(lst, 'r') as f:
@@ -49,6 +50,7 @@ def sample_frames(video_list, input_directory, output_directory, samples_per_vid
                 for frame in frames:
                     output_name = os.path.join(output_directory,
                                                ("%07d.png" % i))
+                    frame = cv2.resize(frame, (size, size), interpolation=cv2.INTER_LINEAR)
                     cv2.imwrite(output_name, frame)
                     i += 1
                     if i % 1000 == 0:
@@ -65,7 +67,8 @@ def main():
     sample_frames(args.video_list,
                   args.input_directory,
                   args.output_directory,
-                  args.samples_per_video)
+                  args.samples_per_video,
+                  args.output_size)
 
 if __name__ == "__main__":
     main()
