@@ -5,6 +5,7 @@ import numpy as np
 
 from model import DCGAN
 from utils import pp
+from utils import inverse_transform
 
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
@@ -131,6 +132,8 @@ def main(_):
 
         # print "DVARS", dcgan.d_vars
         # print "GVARS", dcgan.g_vars
+        import cv2
+        print "OK OPENCV"
 
         with tf.variable_scope('video'):
             vid_z_dim = 120
@@ -160,9 +163,20 @@ def main(_):
             print imgs.shape
             print vids.shape
             
-            import cv2
-
-            print "OK OPENCV"
+            for i in xrange(vids.shape[0]):
+                filename = "/thesis0/yccggrp/youngsan/tmp/video_%05d.mp4" % i
+                print "Writing to", filename
+                w = cv2.VideoWriter(filename,
+                                    0x20,
+                                    25.0,
+                                    (FLAGS.output_size, FLAGS.output_size))
+                for j in xrange(vids.shape[1]):
+                    im = inverse_transform(vids[i][j])
+                    im = np.around(im * 255).astype('uint8')
+                    im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+                    w.write(im)
+                w.release()
+            print "DONE WRITING FILES"
 
 if __name__ == '__main__':
     tf.app.run()
