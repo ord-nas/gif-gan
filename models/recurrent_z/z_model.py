@@ -154,6 +154,11 @@ def main(_):
             sample_z = np.random.uniform(-1, 1, size=(FLAGS.vid_batch_size, vid_z_dim))
             out_val = sess.run(out, feed_dict={z:sample_z})
             print out_val.shape
+
+            imgs = sess.run(dcgan.sampler, feed_dict={dcgan.z:out_val})
+            vids = np.reshape(imgs, (-1, FLAGS.vid_length, FLAGS.output_size, FLAGS.output_size, FLAGS.c_dim))
+            print imgs.shape
+            print vids.shape
             
             import cv2
 
