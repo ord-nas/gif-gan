@@ -41,6 +41,11 @@ class VID_DCGAN(object):
         self.g_bn1 = batch_norm(name='gvideo_bn1')
         self.g_bn2 = batch_norm(name='gvideo_bn2')
         self.g_bn3 = batch_norm(name='gvideo_bn3')
+        self.d_bn0 = batch_norm(name='dvideo_bn0')
+        self.d_bn1 = batch_norm(name='dvideo_bn1')
+        self.d_bn2 = batch_norm(name='dvideo_bn2')
+        self.d_bn3 = batch_norm(name='dvideo_bn3')
+        self.d_bn4 = batch_norm(name='dvideo_bn4')
         self.batch_size = batch_size
         self.output_size = output_size
         self.vid_length = vid_length
@@ -60,43 +65,76 @@ class VID_DCGAN(object):
         print "z_proj:", self.z_project.get_shape().as_list()
 
         self.g0 = tf.reshape(self.z_project, [-1, 1, s16, f16])
-        self.r0 = tf.nn.relu(self.g_bn0(self.g0))
-        print "r0:", self.r0.get_shape().as_list()
+        self.gr0 = tf.nn.relu(self.g_bn0(self.g0))
+        print "gr0:", self.gr0.get_shape().as_list()
 
         self.g1, self.g1_w, self.g1_b = deconv2d(
-            self.r0, [self.batch_size, 1, s8, f8],
+            self.gr0, [self.batch_size, 1, s8, f8],
             d_h=1, k_h=1, k_w=k_w, name='gvideo_1', with_w=True)
-        self.r1 = tf.nn.relu(self.g_bn1(self.g1))
-        print "r1:", self.r1.get_shape().as_list()
+        self.gr1 = tf.nn.relu(self.g_bn1(self.g1))
+        print "gr1:", self.gr1.get_shape().as_list()
         print "filter:", self.g1_w.get_shape().as_list()
 
         self.g2, self.g2_w, self.g2_b = deconv2d(
-            self.r1, [self.batch_size, 1, s4, f4],
+            self.gr1, [self.batch_size, 1, s4, f4],
             d_h=1, k_h=1, k_w=k_w, name='gvideo_2', with_w=True)
-        self.r2 = tf.nn.relu(self.g_bn2(self.g2))
-        print "r2:", self.r2.get_shape().as_list()
+        self.gr2 = tf.nn.relu(self.g_bn2(self.g2))
+        print "gr2:", self.gr2.get_shape().as_list()
         print "filter:", self.g2_w.get_shape().as_list()
         
         self.g3, self.g3_w, self.g3_b = deconv2d(
-            self.r2, [self.batch_size, 1, s2, f2],
+            self.gr2, [self.batch_size, 1, s2, f2],
             d_h=1, k_h=1, k_w=k_w, name='gvideo_3', with_w=True)
-        self.r3 = tf.nn.relu(self.g_bn3(self.g3))
-        print "r3:", self.r3.get_shape().as_list()
+        self.gr3 = tf.nn.relu(self.g_bn3(self.g3))
+        print "gr3:", self.gr3.get_shape().as_list()
         print "filter:", self.g3_w.get_shape().as_list()
 
         self.g4, self.g4_w, self.g4_b = deconv2d(
-            self.r3, [self.batch_size, 1, s, f],
+            self.gr3, [self.batch_size, 1, s, f],
             d_h=1, k_h=1, k_w=k_w, name='gvideo_4', with_w=True)
-        self.r4 = tf.nn.tanh(self.g4)
-        print "r4:", self.r4.get_shape().as_list()
+        self.gr4 = tf.nn.tanh(self.g4)
+        print "gr4:", self.gr4.get_shape().as_list()
         print "filter:", self.g4_w.get_shape().as_list()
         
-        self.r4_2d = tf.reshape(self.r4, [-1, s, f])
-        print "r4_2d:", self.r4_2d.get_shape().as_list()
-        self.r4_1d = tf.reshape(self.r4, [-1, f])
-        print "r4_1d:", self.r4_1d.get_shape().as_list()
+        self.gr4_2d = tf.reshape(self.gr4, [-1, s, f])
+        print "gr4_2d:", self.gr4_2d.get_shape().as_list()
+        self.gr4_1d = tf.reshape(self.gr4, [-1, f])
+        print "gr4_1d:", self.gr4_1d.get_shape().as_list()
 
-        return self.r4_1d
+        return self.gr4_1d
+    def discriminator(self, vid, reuse=False):
+        # First we wanna just project into a reasonable shape.
+        # Squeeze all of the per-frame stuff togther
+        print "vid:", vid.get_shape().as_list()
+        vid = tf.reshape(vid, [self.batch_size * self.vid_length, -1])
+        print "vid (reshaped):", vid.get_shape().as_list()
+
+        f = self.output_size # No reason for it to be this number other than symmetry
+        f, f2, f4, f8, f16 = [int(f*x) for x in np.logspace(math.log10(1),
+                                                            math.log10(2),
+                                                            5)]
+        k_w = 3
+        
+        self.vid_project, self.d0_w, self.d0_b = linear(
+            vid, f, 'dvideo_0', with_w=True)
+        print "vid_project:", self.vid_project.get_shape().as_list()
+
+        self.d0 = tf.reshape(self.vid_project, [self.batch_size, 1, self.vid_length, -1])
+        self.dr0 = tf.nn.relu(self.d_bn0(self.d0))
+        print "dr0:", self.dr0.get_shape().as_list()
+
+        self.dr1 = lrelu(self.d_bn1(conv2d(self.dr0, f2, k_h=1, k_w=k_w, d_h=1, name='dvideo_h1')))
+        print "dr1:", self.dr1.get_shape().as_list()
+        self.dr2 = lrelu(self.d_bn2(conv2d(self.dr1, f4, k_h=1, k_w=k_w, d_h=1, name='dvideo_h2')))
+        print "dr2:", self.dr2.get_shape().as_list()
+        self.dr3 = lrelu(self.d_bn3(conv2d(self.dr2, f8, k_h=1, k_w=k_w, d_h=1, name='dvideo_h3')))
+        print "dr3:", self.dr3.get_shape().as_list()
+        self.dr4 = lrelu(self.d_bn4(conv2d(self.dr3, f16, k_h=1, k_w=k_w, d_h=1, name='dvideo_h4')))
+        print "dr4:", self.dr4.get_shape().as_list()
+        self.d5 = linear(tf.reshape(self.dr4, [self.batch_size, -1]), 1, 'dvideo_h5')
+        print "d5:", self.d5.get_shape().as_list()
+
+        return tf.nn.sigmoid(self.d5), self.d5
 
 
 def main(_):
@@ -130,6 +168,16 @@ def main(_):
             else:
                 print "FAIL!"
 
+        # for n in tf.get_default_graph().as_graph_def().node:
+        #     include = False
+        #     for i in [0,1,2,3]:
+        #         if ("image/d_h%d_conv/Conv2D" % i) in n.name:
+        #             include = True
+        #     if include:
+        #         print n.name, tf.get_default_graph().get_tensor_by_name(n.name + ":0").get_shape().as_list()
+        #pp.pprint([n.name for n in tf.get_default_graph().as_graph_def().node])
+        #return
+
         # print "DVARS", dcgan.d_vars
         # print "GVARS", dcgan.g_vars
         import cv2
@@ -146,8 +194,16 @@ def main(_):
             z = tf.placeholder(tf.float32, [FLAGS.vid_batch_size, vid_z_dim], name='vid_z')
             out = vid_dcgan.generator(z)
 
-            print "DONE"
+            d_penultimate_layer_name = "image/d_h3_conv/Conv2D:0"
+            d_tensor = tf.get_default_graph().get_tensor_by_name(d_penultimate_layer_name)
+            # print d_tensor.get_shape().as_list()
+            # vid_d_input = tf.reshape(d_tensor, [FLAGS.vid_batch_size, FLAGS.vid_length, -1])
+            # print vid_d_input.get_shape().as_list()
 
+            d_out = vid_dcgan.discriminator(d_tensor, reuse=False)
+        
+            print "DONE"
+            return
 
             print sess.run(tf.report_uninitialized_variables())
             un_init = [v for v in tf.global_variables() if not sess.run(tf.is_variable_initialized(v))]
@@ -163,20 +219,20 @@ def main(_):
             print imgs.shape
             print vids.shape
             
-            for i in xrange(vids.shape[0]):
-                filename = "/thesis0/yccggrp/youngsan/tmp/video_%05d.mp4" % i
-                print "Writing to", filename
-                w = cv2.VideoWriter(filename,
-                                    0x20,
-                                    25.0,
-                                    (FLAGS.output_size, FLAGS.output_size))
-                for j in xrange(vids.shape[1]):
-                    im = inverse_transform(vids[i][j])
-                    im = np.around(im * 255).astype('uint8')
-                    im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
-                    w.write(im)
-                w.release()
-            print "DONE WRITING FILES"
+            # for i in xrange(vids.shape[0]):
+            #     filename = "/thesis0/yccggrp/youngsan/tmp/video_%05d.mp4" % i
+            #     print "Writing to", filename
+            #     w = cv2.VideoWriter(filename,
+            #                         0x20,
+            #                         25.0,
+            #                         (FLAGS.output_size, FLAGS.output_size))
+            #     for j in xrange(vids.shape[1]):
+            #         im = inverse_transform(vids[i][j])
+            #         im = np.around(im * 255).astype('uint8')
+            #         im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+            #         w.write(im)
+            #     w.release()
+            # print "DONE WRITING FILES"
 
 if __name__ == '__main__':
     tf.app.run()
