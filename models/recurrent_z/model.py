@@ -241,7 +241,7 @@ class DCGAN(object):
                             feed_dict={self.z: sample_z, self.images: sample_images}
                         )
                     save_images(samples, [8, 8],
-                                './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
+                                '{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
                     print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
 
                 if np.mod(counter, 500) == 2:
