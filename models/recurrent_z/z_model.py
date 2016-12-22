@@ -9,7 +9,6 @@ from utils import pp
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
-import cv2
 import math
 
 flags = tf.app.flags
@@ -47,9 +46,9 @@ class VID_DCGAN(object):
     def generator(self, z):
         print "z:", z.get_shape().as_list()
         f = self.output_size
-        f, f2, f4, f8, f16 = [f*x for x in np.logspace(math.log10(1),
-                                                       math.log10(2),
-                                                       5)]#[2,4,8,16]]
+        f, f2, f4, f8, f16 = [int(f*x) for x in np.logspace(math.log10(1),
+                                                            math.log10(2),
+                                                            5)]#[2,4,8,16]]
         s = self.vid_length
         s_power_2 = 1<<(s-1).bit_length()
         s2, s4, s8, s16 = [int(s_power_2/x) for x in [2,4,8,16]]
@@ -145,6 +144,20 @@ def main(_):
             out = vid_dcgan.generator(z)
 
             print "DONE"
+
+
+            print sess.run(tf.report_uninitialized_variables())
+            un_init = [v for v in tf.global_variables() if not sess.run(tf.is_variable_initialized(v))]
+            sess.run(tf.variables_initializer(un_init))
+            print sess.run(tf.report_uninitialized_variables())
+
+            sample_z = np.random.uniform(-1, 1, size=(FLAGS.vid_batch_size, vid_z_dim))
+            out_val = sess.run(out, feed_dict={z:sample_z})
+            print out_val.shape
+            
+            import cv2
+
+            print "OK OPENCV"
 
 if __name__ == '__main__':
     tf.app.run()
