@@ -15,7 +15,8 @@ class DCGAN(object):
                  y_dim=None, z_dim=100, gf_dim=64, df_dim=64,
                  gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='default',
                  checkpoint_dir=None, sample_dir=None, data_dir='./data',
-                 log_dir='./logs', image_glob='*.jpg', shuffle=False):
+                 log_dir='./logs', image_glob='*.jpg', shuffle=False,
+                 z=None, sample_z=None):
         """
 
         Args:
@@ -69,9 +70,9 @@ class DCGAN(object):
 
         self.dataset_name = dataset_name
         self.checkpoint_dir = checkpoint_dir
-        self.build_model()
+        self.build_model(z, sample_z)
 
-    def build_model(self):
+    def build_model(self, z, sample_z):
         if self.y_dim:
             self.y= tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
 
@@ -79,8 +80,15 @@ class DCGAN(object):
                                     name='real_images')
         self.sample_images= tf.placeholder(tf.float32, [self.sample_size] + [self.output_size, self.output_size, self.c_dim],
                                         name='sample_images')
-        self.z = tf.placeholder(tf.float32, [None, self.z_dim],
-                                name='z')
+        if z is not None:
+            self.z = z
+        else:
+            self.z = tf.placeholder(tf.float32, [None, self.z_dim], name='z')
+
+        if sample_z is not None:
+            self.sample_z = sample_z
+        else:
+            self.sample_z = self.z
 
         self.z_sum = tf.histogram_summary("z", self.z)
 
@@ -94,7 +102,7 @@ class DCGAN(object):
             self.G = self.generator(self.z)
             self.D, self.D_logits, self.D_activations = self.discriminator(self.images)
 
-            self.sampler = self.sampler(self.z)
+            self.sampler = self.sampler(sample_z)
             self.D_, self.D_logits_, self.D_activations_ = self.discriminator(self.G, reuse=True)
         
 

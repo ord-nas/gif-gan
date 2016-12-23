@@ -12,6 +12,9 @@ import tensorflow.contrib.slim as slim
 
 import math
 import glob
+import cv2 # For some reason this seems to make the initial variable
+           # initialization take a long time
+
 
 flags = tf.app.flags
 flags.DEFINE_integer("epoch", 25, "Epoch to train [25]")
@@ -74,16 +77,6 @@ class VID_DCGAN(object):
         self.build_model(sess)
 
     def build_model(self, sess):
-        # First build the inner image gan
-        with tf.variable_scope('image_gan'):
-            self.img_dcgan = DCGAN(sess, image_size=self.input_image_size,
-                                   batch_size=self.batch_size * self.vid_length,
-                                   output_size=self.output_image_size, c_dim=self.c_dim,
-                                   dataset_name='', is_crop=False,
-                                   checkpoint_dir='', sample_dir='',
-                                   data_dir='', log_dir='', image_glob='', shuffle=False)
-            self.image_gan_scope_name = tf.get_variable_scope().name + "/"
-
         # Build generator
         self.z = tf.placeholder(tf.float32, [self.batch_size, self.z_input_size],
                                 name='gvideo_z')
@@ -92,6 +85,17 @@ class VID_DCGAN(object):
             self.G, self.G_layers = self.generator(self.z, reuse=False, train=True)
             print "Making sampler..."
             self.G_sampler, self.G_sampler_layers = self.generator(self.z, reuse=True, train=False)
+
+        # Build the inner image gan
+        with tf.variable_scope('image_gan'):
+            self.img_dcgan = DCGAN(sess, image_size=self.input_image_size,
+                                   batch_size=self.batch_size * self.vid_length,
+                                   output_size=self.output_image_size, c_dim=self.c_dim,
+                                   dataset_name='', is_crop=False,
+                                   checkpoint_dir='', sample_dir='',
+                                   data_dir='', log_dir='', image_glob='', shuffle=False,
+                                   z=self.G, sample_z=self.G_sampler)
+            self.image_gan_scope_name = tf.get_variable_scope().name + "/"
 
         # Build discriminator
         with tf.variable_scope('video_discriminator'):
@@ -155,15 +159,15 @@ class VID_DCGAN(object):
         if config.video_shuffle:
             np.random.shuffle(files)
 
-        return
-            
         # Create optimizers
+        print "Creating discriminator optimizers..."
         d_vars = self.d_vid_vars
         if config.train_img_disc:
             d_vars = d_vars + self.d_img_vars
         d_optim = (tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1)
                    .minimize(self.d_loss, var_list=d_vars))
 
+        print "Creating generator optimizers..."
         g_vars = self.g_vid_vars
         if config.train_img_gen:
             g_vars = g_vars + self.g_img_vars
@@ -175,6 +179,7 @@ class VID_DCGAN(object):
         sample_z = np.random.uniform(-1, 1, size=(self.sample_rows * self.sample_cols,
                                                   self.z_input_size))
 
+        print "Doing a batch..."
         batch_size = self.batch_size
         for epoch in xrange(config.epoch):
             for i in xrange(0, len(files) // batch_size):
@@ -184,7 +189,7 @@ class VID_DCGAN(object):
 
     def load_videos(self, files):
         n = len(files)
-        videos = np.zeros(n, self.vid_length, self.output_size, self.output_size, self.c_dim)
+        videos = np.zeros(shape=(n, self.vid_length, self.input_image_size, self.input_image_size, self.c_dim))
         for (i, f) in enumerate(files):
             print "Reading", f
             cap = cv2.VideoCapture(f)
@@ -193,7 +198,9 @@ class VID_DCGAN(object):
                 ret, im = cap.read()
                 if not ret:
                     break
-                assert im.shape == (self.output_size, self.output_size, self.c_dim)
+                im = cv2.resize(im, (self.input_image_size, self.input_image_size),
+                                interpolation=cv2.INTER_LINEAR)
+                assert im.shape == (self.input_image_size, self.input_image_size, self.c_dim)
                 im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
                 im = transform(im, is_crop=False)
                 videos[i,frame,:,:,:] = im
@@ -331,7 +338,7 @@ def main(_):
             print out_val.shape
 
             # Generate videos from the z-vectors
-            imgs = sess.run(vid_dcgan.img_dcgan.sampler, feed_dict={vid_dcgan.img_dcgan.z:out_val})
+            imgs = sess.run(vid_dcgan.img_dcgan.sampler, feed_dict={vid_dcgan.img_dcgan.sample_z:out_val})
             vids = np.reshape(imgs, (-1, FLAGS.vid_length, FLAGS.output_size, FLAGS.output_size, FLAGS.c_dim))
             print imgs.shape
             print vids.shape
@@ -344,7 +351,6 @@ def main(_):
             vid_dcgan.train(FLAGS)
 
             # # Write the videos out to file
-            # import cv2
             # print "OK OPENCV"
             # for i in xrange(vids.shape[0]):
             #     filename = "/thesis0/yccggrp/youngsan/tmp2/video_%05d.mp4" % i
