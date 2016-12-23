@@ -92,10 +92,10 @@ class DCGAN(object):
             self.D_, self.D_logits_ = self.discriminator(self.G, self.y, reuse=True)
         else:
             self.G = self.generator(self.z)
-            self.D, self.D_logits = self.discriminator(self.images)
+            self.D, self.D_logits, self.D_activations = self.discriminator(self.images)
 
             self.sampler = self.sampler(self.z)
-            self.D_, self.D_logits_ = self.discriminator(self.G, reuse=True)
+            self.D_, self.D_logits_, self.D_activations_ = self.discriminator(self.G, reuse=True)
         
 
         self.d_sum = tf.histogram_summary("d", self.D)
@@ -258,7 +258,7 @@ class DCGAN(object):
             h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, name='d_h3_conv')))
             h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h3_lin')
 
-            return tf.nn.sigmoid(h4), h4
+            return tf.nn.sigmoid(h4), h4, h3
         else:
             yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
             x = conv_cond_concat(image, yb)

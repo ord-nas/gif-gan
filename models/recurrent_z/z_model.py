@@ -25,7 +25,7 @@ flags.DEFINE_integer("image_size", 64, "The size of images used [64]")
 flags.DEFINE_integer("output_size", 64, "The size of the output images to produce [64]")
 flags.DEFINE_integer("c_dim", 3, "Dimension of image color. [3]")
 flags.DEFINE_string("image_dataset", "celebA", "The name of dataset [celebA, mnist, lsun]")
-flags.DEFINE_string("image_checkpoint_dir", "checkpoint", "Directory name to save the checkpoints [checkpoint]")
+flags.DEFINE_string("image_model_dir", "checkpoint", "Directory name to load the image checkpoints [checkpoint]")
 # flags.DEFINE_string("video_checkpoint_dir", "checkpoint", "Directory name to save the video checkpoints [checkpoint]")
 flags.DEFINE_string("video_sample_dir", "samples", "Directory name to save the video samples [samples]")
 flags.DEFINE_string("video_data_dir", "./data", "Directory to read dataset from")
@@ -45,16 +45,17 @@ class Layers(object):
     pass
 
 class VID_DCGAN(object):
-    def __init__(self, batch_size, z_input_size, z_output_size, vid_length,
-                 real_img_discriminator, fake_img_discriminator,
+    def __init__(self, sess, batch_size, z_input_size, z_output_size, vid_length,
+                 input_image_size, output_image_size, c_dim,
                  sample_rows=8, sample_cols=8):
         # Member vars
         self.batch_size = batch_size
         self.z_input_size = z_input_size
         self.z_output_size = z_output_size
         self.vid_length = vid_length
-        self.real_img_discriminator = real_img_discriminator
-        self.fake_img_discriminator = fake_img_discriminator
+        self.input_image_size = input_image_size
+        self.output_image_size = output_image_size
+        self.c_dim = c_dim
         self.sample_rows = sample_rows
         self.sample_cols = sample_cols
 
@@ -70,9 +71,19 @@ class VID_DCGAN(object):
         self.d_bn4 = batch_norm(name='dvideo_bn4')
 
         # Actually construct the model
-        self.build_model()
+        self.build_model(sess)
 
-    def build_model(self):
+    def build_model(self, sess):
+        # First build the inner image gan
+        with tf.variable_scope('image_gan'):
+            self.img_dcgan = DCGAN(sess, image_size=self.input_image_size,
+                                   batch_size=self.batch_size * self.vid_length,
+                                   output_size=self.output_image_size, c_dim=self.c_dim,
+                                   dataset_name='', is_crop=False,
+                                   checkpoint_dir='', sample_dir='',
+                                   data_dir='', log_dir='', image_glob='', shuffle=False)
+            self.image_gan_scope_name = tf.get_variable_scope().name + "/"
+
         # Build generator
         self.z = tf.placeholder(tf.float32, [self.batch_size, self.z_input_size],
                                 name='gvideo_z')
@@ -87,10 +98,10 @@ class VID_DCGAN(object):
             print "Scope name:", tf.get_variable_scope().name
             print "Making first discriminator..."
             self.d_real_out, self.d_real_out_logits, self.D_real_layers = self.discriminator(
-                self.real_img_discriminator, reuse=False)
+                self.img_dcgan.D_activations, reuse=False)
             print "Making second discriminator..."
             self.d_fake_out, self.d_fake_out_logits, self.D_fake_layers = self.discriminator(
-                self.fake_img_discriminator, reuse=True)
+                self.img_dcgan.D_activations_, reuse=True)
 
         # Define trainable variables
         t_vars = tf.trainable_variables()
@@ -108,6 +119,25 @@ class VID_DCGAN(object):
         self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
             self.d_fake_out_logits, tf.ones_like(self.d_fake_out)))
 
+    def load_image_gan(self, sess, checkpoint_dir):
+        print "Loading checkpoints from", checkpoint_dir
+
+        ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+        if ckpt and ckpt.model_checkpoint_path:
+            ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+            d = {}
+            for v in tf.global_variables():
+                n = v.op.name
+                prefix = self.image_gan_scope_name
+                if not n.startswith(prefix):
+                    continue
+                d[n[len(prefix):]] = v
+            saver = tf.train.Saver(var_list=d)
+            saver.restore(sess, os.path.join(checkpoint_dir, ckpt_name))
+            print "Success!"
+        else:
+            print "FAIL!"
+        
     def train(self, config):
         files = []
         for lst in config.video_list:
@@ -125,6 +155,8 @@ class VID_DCGAN(object):
         if config.video_shuffle:
             np.random.shuffle(files)
 
+        return
+            
         # Create optimizers
         d_vars = self.d_vid_vars
         if config.train_img_disc:
@@ -270,100 +302,65 @@ def main(_):
     pp.pprint(flags.FLAGS.__flags)
 
     with tf.Session() as sess:
-        with tf.variable_scope('image'):
-            dcgan = DCGAN(sess, image_size=FLAGS.image_size,
-                          batch_size=FLAGS.vid_batch_size * FLAGS.vid_length,
-                          output_size=FLAGS.output_size, c_dim=FLAGS.c_dim,
-                          dataset_name=FLAGS.image_dataset, is_crop=False,
-                          checkpoint_dir=FLAGS.image_checkpoint_dir, sample_dir='',
-                          data_dir='', log_dir='', image_glob='', shuffle=False)
-
-            model_dir = "%s_%s_%s" % (FLAGS.image_dataset, FLAGS.image_batch_size, FLAGS.output_size)
-            checkpoint_dir = os.path.join(FLAGS.image_checkpoint_dir, model_dir)
-            print "Loading checkpoints from", checkpoint_dir
-
-            ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
-            if ckpt and ckpt.model_checkpoint_path:
-                ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-                d = {}
-                for v in tf.global_variables():
-                    n = v.op.name
-                    prefix = tf.get_variable_scope().name + "/"
-                    assert n.startswith(prefix)
-                    d[n[len(prefix):]] = v
-                saver = tf.train.Saver(var_list=d)
-                saver.restore(sess, os.path.join(checkpoint_dir, ckpt_name))
-                print "Success!"
-            else:
-                print "FAIL!"
-
-        # for n in tf.get_default_graph().as_graph_def().node:
-        #     include = False
-        #     for i in [0,1,2,3]:
-        #         if ("image/d_h%d_conv/Conv2D" % i) in n.name:
-        #             include = True
-        #     if include:
-        #         print n.name, tf.get_default_graph().get_tensor_by_name(n.name + ":0").get_shape().as_list()
-        # pp.pprint([n.name for n in tf.get_default_graph().as_graph_def().node])
-        # return
-
-        # print "DVARS", dcgan.d_vars
-        # print "GVARS", dcgan.g_vars
-
-        with tf.variable_scope('video'):
+        with tf.variable_scope('video_gan'):
             vid_z_dim = 120
             image_z_dim = 100
 
-            d_penultimate_layer_name = "image/d_h3_conv/Conv2D:0"
-            d_tensor = tf.get_default_graph().get_tensor_by_name(d_penultimate_layer_name)
-            d_fake_penultimate_layer_name = "image/d_h3_conv_1/Conv2D:0"
-            d_fake_tensor = tf.get_default_graph().get_tensor_by_name(d_fake_penultimate_layer_name)            
-            
-            vid_dcgan = VID_DCGAN(FLAGS.vid_batch_size,
+            # Build the model
+            vid_dcgan = VID_DCGAN(sess,
+                                  FLAGS.vid_batch_size,
                                   vid_z_dim,
                                   image_z_dim,
                                   FLAGS.vid_length,
-                                  d_tensor,
-                                  d_fake_tensor)
+                                  FLAGS.image_size,
+                                  FLAGS.output_size,
+                                  c_dim=FLAGS.c_dim)
         
             print "DONE"
 
-            print sess.run(tf.report_uninitialized_variables())
-            un_init = [v for v in tf.global_variables() if not sess.run(tf.is_variable_initialized(v))]
-            sess.run(tf.variables_initializer(un_init))
-            print sess.run(tf.report_uninitialized_variables())
+            # Init vars
+            sess.run(tf.global_variables_initializer())
 
+            # Load image model weights. This needs to happen *after* init, so
+            # that we don't overwrite the weights we load.
+            vid_dcgan.load_image_gan(sess, FLAGS.image_model_dir)
+
+            # Generate some z-vectors for one video.
             sample_z = np.random.uniform(-1, 1, size=(FLAGS.vid_batch_size, vid_z_dim))
             out_val = sess.run(vid_dcgan.G, feed_dict={vid_dcgan.z:sample_z})
             print out_val.shape
 
-            imgs = sess.run(dcgan.sampler, feed_dict={dcgan.z:out_val})
+            # Generate videos from the z-vectors
+            imgs = sess.run(vid_dcgan.img_dcgan.sampler, feed_dict={vid_dcgan.img_dcgan.z:out_val})
             vids = np.reshape(imgs, (-1, FLAGS.vid_length, FLAGS.output_size, FLAGS.output_size, FLAGS.c_dim))
             print imgs.shape
             print vids.shape
 
-            print "FAKE DISC", sess.run(vid_dcgan.d_fake_out, feed_dict={dcgan.z:out_val})
-            print "REAL DISC", sess.run(vid_dcgan.d_real_out, feed_dict={dcgan.images:imgs})
+            # Test the discriminator
+            print "FAKE DISC", sess.run(vid_dcgan.d_fake_out, feed_dict={vid_dcgan.img_dcgan.z:out_val})
+            print "REAL DISC", sess.run(vid_dcgan.d_real_out, feed_dict={vid_dcgan.img_dcgan.images:imgs})
 
+            # This doesn't do much yet
             vid_dcgan.train(FLAGS)
-            
+
+            # # Write the videos out to file
             # import cv2
             # print "OK OPENCV"
             # for i in xrange(vids.shape[0]):
-            #     # filename = "/thesis0/yccggrp/youngsan/tmp/video_%05d.mp4" % i
-            #     filename = "/thesis0/yccggrp/youngsan/tmp/video_%05d" % i
+            #     filename = "/thesis0/yccggrp/youngsan/tmp2/video_%05d.mp4" % i
+            #     # filename = "/thesis0/yccggrp/youngsan/tmp/video_%05d" % i
             #     print "Writing to", filename
-            #     # w = cv2.VideoWriter(filename,
-            #     #                     0x20,
-            #     #                     25.0,
-            #     #                     (FLAGS.output_size, FLAGS.output_size))
+            #     w = cv2.VideoWriter(filename,
+            #                         0x20,
+            #                         25.0,
+            #                         (FLAGS.output_size, FLAGS.output_size))
             #     for j in xrange(vids.shape[1]):
             #         im = inverse_transform(vids[i][j])
             #         im = np.around(im * 255).astype('uint8')
             #         im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
-            #         # w.write(im)
-            #         cv2.imwrite(filename + ("_%02d" % j) + ".png", im)
-            #     # w.release()
+            #         w.write(im)
+            #         #cv2.imwrite(filename + ("_%02d" % j) + ".png", im)
+            #     w.release()
             # print "DONE WRITING FILES"
 
 if __name__ == '__main__':
