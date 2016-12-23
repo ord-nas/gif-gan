@@ -36,7 +36,17 @@ flags.DEFINE_string("image_checkpoint_dir", "checkpoint", "Directory name to sav
 FLAGS = flags.FLAGS
 
 class VID_DCGAN(object):
-    def __init__(self, batch_size, output_size, vid_length):
+    def __init__(self, batch_size, z_input_size, z_output_size, vid_length,
+                 real_img_discriminator, fake_img_discriminator):
+        # Local vars
+        self.batch_size = batch_size
+        self.z_input_size = z_input_size
+        self.z_output_size = z_output_size
+        self.vid_length = vid_length
+        self.real_img_discriminator = real_img_discriminator
+        self.fake_img_discriminator = fake_img_discriminator
+
+        # Batch norm layers
         self.g_bn0 = batch_norm(name='gvideo_bn0')
         self.g_bn1 = batch_norm(name='gvideo_bn1')
         self.g_bn2 = batch_norm(name='gvideo_bn2')
@@ -46,12 +56,29 @@ class VID_DCGAN(object):
         self.d_bn2 = batch_norm(name='dvideo_bn2')
         self.d_bn3 = batch_norm(name='dvideo_bn3')
         self.d_bn4 = batch_norm(name='dvideo_bn4')
-        self.batch_size = batch_size
-        self.output_size = output_size
-        self.vid_length = vid_length
+
+        # Actually construct the model
+        self.build_model()
+
+    def build_model(self):
+        self.z = tf.placeholder(tf.float32, [self.batch_size, self.z_input_size],
+                                name='gvideo_z')
+        self.G = self.generator(self.z)
+
+        with tf.variable_scope('video_discriminator'):
+            print "Making first discriminator..."
+            # print d_tensor.get_shape().as_list()
+            # vid_d_input = tf.reshape(d_tensor, [FLAGS.vid_batch_size, FLAGS.vid_length, -1])
+            # print vid_d_input.get_shape().as_list()
+            self.d_real_out, self.d_real_out_logits = self.discriminator(
+                self.real_img_discriminator, reuse=False)
+            print "Making second discriminator..."
+            self.d_fake_out, self.d_fake_out_logits = self.discriminator(
+                self.fake_img_discriminator, reuse=True)
+        
     def generator(self, z):
         print "z:", z.get_shape().as_list()
-        f = self.output_size
+        f = self.z_output_size
         f, f2, f4, f8, f16 = [int(f*x) for x in np.logspace(math.log10(1),
                                                             math.log10(2),
                                                             5)]#[2,4,8,16]]
@@ -102,14 +129,18 @@ class VID_DCGAN(object):
         print "gr4_1d:", self.gr4_1d.get_shape().as_list()
 
         return self.gr4_1d
+
     def discriminator(self, vid, reuse=False):
+        if reuse:
+            tf.get_variable_scope().reuse_variables()
+
         # First we wanna just project into a reasonable shape.
         # Squeeze all of the per-frame stuff togther
         print "vid:", vid.get_shape().as_list()
         vid = tf.reshape(vid, [self.batch_size * self.vid_length, -1])
         print "vid (reshaped):", vid.get_shape().as_list()
 
-        f = self.output_size # No reason for it to be this number other than symmetry
+        f = self.z_output_size # No reason for it to be this number other than symmetry
         f, f2, f4, f8, f16 = [int(f*x) for x in np.logspace(math.log10(1),
                                                             math.log10(2),
                                                             5)]
@@ -175,35 +206,29 @@ def main(_):
         #             include = True
         #     if include:
         #         print n.name, tf.get_default_graph().get_tensor_by_name(n.name + ":0").get_shape().as_list()
-        #pp.pprint([n.name for n in tf.get_default_graph().as_graph_def().node])
-        #return
+        # pp.pprint([n.name for n in tf.get_default_graph().as_graph_def().node])
+        # return
 
         # print "DVARS", dcgan.d_vars
         # print "GVARS", dcgan.g_vars
-        import cv2
-        print "OK OPENCV"
 
         with tf.variable_scope('video'):
             vid_z_dim = 120
             image_z_dim = 100
 
-            vid_dcgan = VID_DCGAN(FLAGS.vid_batch_size,
-                                  image_z_dim,
-                                  FLAGS.vid_length)
-
-            z = tf.placeholder(tf.float32, [FLAGS.vid_batch_size, vid_z_dim], name='vid_z')
-            out = vid_dcgan.generator(z)
-
             d_penultimate_layer_name = "image/d_h3_conv/Conv2D:0"
             d_tensor = tf.get_default_graph().get_tensor_by_name(d_penultimate_layer_name)
-            # print d_tensor.get_shape().as_list()
-            # vid_d_input = tf.reshape(d_tensor, [FLAGS.vid_batch_size, FLAGS.vid_length, -1])
-            # print vid_d_input.get_shape().as_list()
-
-            d_out = vid_dcgan.discriminator(d_tensor, reuse=False)
+            d_fake_penultimate_layer_name = "image/d_h3_conv_1/Conv2D:0"
+            d_fake_tensor = tf.get_default_graph().get_tensor_by_name(d_fake_penultimate_layer_name)            
+            
+            vid_dcgan = VID_DCGAN(FLAGS.vid_batch_size,
+                                  vid_z_dim,
+                                  image_z_dim,
+                                  FLAGS.vid_length,
+                                  d_tensor,
+                                  d_fake_tensor)
         
             print "DONE"
-            return
 
             print sess.run(tf.report_uninitialized_variables())
             un_init = [v for v in tf.global_variables() if not sess.run(tf.is_variable_initialized(v))]
@@ -211,27 +236,34 @@ def main(_):
             print sess.run(tf.report_uninitialized_variables())
 
             sample_z = np.random.uniform(-1, 1, size=(FLAGS.vid_batch_size, vid_z_dim))
-            out_val = sess.run(out, feed_dict={z:sample_z})
+            out_val = sess.run(vid_dcgan.G, feed_dict={vid_dcgan.z:sample_z})
             print out_val.shape
 
             imgs = sess.run(dcgan.sampler, feed_dict={dcgan.z:out_val})
             vids = np.reshape(imgs, (-1, FLAGS.vid_length, FLAGS.output_size, FLAGS.output_size, FLAGS.c_dim))
             print imgs.shape
             print vids.shape
+
+            print "FAKE DISC", sess.run(vid_dcgan.d_fake_out, feed_dict={dcgan.z:out_val})
+            print "REAL DISC", sess.run(vid_dcgan.d_real_out, feed_dict={dcgan.images:imgs})
             
+            # import cv2
+            # print "OK OPENCV"
             # for i in xrange(vids.shape[0]):
-            #     filename = "/thesis0/yccggrp/youngsan/tmp/video_%05d.mp4" % i
+            #     # filename = "/thesis0/yccggrp/youngsan/tmp/video_%05d.mp4" % i
+            #     filename = "/thesis0/yccggrp/youngsan/tmp/video_%05d" % i
             #     print "Writing to", filename
-            #     w = cv2.VideoWriter(filename,
-            #                         0x20,
-            #                         25.0,
-            #                         (FLAGS.output_size, FLAGS.output_size))
+            #     # w = cv2.VideoWriter(filename,
+            #     #                     0x20,
+            #     #                     25.0,
+            #     #                     (FLAGS.output_size, FLAGS.output_size))
             #     for j in xrange(vids.shape[1]):
             #         im = inverse_transform(vids[i][j])
             #         im = np.around(im * 255).astype('uint8')
             #         im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
-            #         w.write(im)
-            #     w.release()
+            #         # w.write(im)
+            #         cv2.imwrite(filename + ("_%02d" % j) + ".png", im)
+            #     # w.release()
             # print "DONE WRITING FILES"
 
 if __name__ == '__main__':
