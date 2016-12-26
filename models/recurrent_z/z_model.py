@@ -28,7 +28,7 @@ flags.DEFINE_integer("output_size", 64, "The size of the output images to produc
 flags.DEFINE_integer("c_dim", 3, "Dimension of image color. [3]")
 # flags.DEFINE_string("image_dataset", "celebA", "The name of dataset [celebA, mnist, lsun]")
 flags.DEFINE_string("image_model_dir", "checkpoint", "Directory name to load the image checkpoints [checkpoint]")
-# flags.DEFINE_string("video_checkpoint_dir", "checkpoint", "Directory name to save the video checkpoints [checkpoint]")
+flags.DEFINE_string("video_checkpoint_dir", "checkpoint", "Directory name to save the video checkpoints [checkpoint]")
 flags.DEFINE_string("video_sample_dir", "samples", "Directory name to save the video samples [samples]")
 flags.DEFINE_string("video_data_dir", "./data", "Directory to read dataset from")
 flags.DEFINE_string("video_dataset", "", "Name of video dataset to use")
@@ -185,7 +185,11 @@ class VID_DCGAN(object):
         sample_z = np.random.uniform(-1, 1, size=(self.sample_rows * self.sample_cols,
                                                   self.z_input_size))
 
-        # print "Doing a batch..."
+        # Initialize a saver
+        saver = tf.train.Saver()
+        writer = tf.summary.FileWriter(config.log_dir, sess.graph)
+
+        # Main train loop
         counter = 0
         batch_size = self.batch_size
         for epoch in xrange(config.epoch):
@@ -221,7 +225,11 @@ class VID_DCGAN(object):
                          d_losses, g_losses))
 
                 if counter % 10 == 0:
-                    self.dump_sample(self.sample_z, sess, config, epoch, i)
+                    self.dump_sample(sample_z, sess, config, epoch, i)
+                    saver.save(sess,
+                               os.path.join(config.video_checkpoint_dir,
+                                            "VID_DCGAN.model"),
+                               global_step=counter)
 
     def dump_sample(self, sample_z, sess, config, epoch, idx):
         sz = self.output_image_size
@@ -418,7 +426,6 @@ def main(_):
             # vid_dcgan.dump_sample(sample_z, sess, FLAGS, 4, 20)
             # return
             
-            # This doesn't do much yet
             vid_dcgan.train(sess, FLAGS)
 
             # # Write the videos out to file
