@@ -15,7 +15,6 @@ import glob
 import cv2 # For some reason this seems to make the initial variable
            # initialization take a long time
 
-
 flags = tf.app.flags
 flags.DEFINE_integer("epoch", 25, "Epoch to train [25]")
 flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
@@ -27,7 +26,7 @@ flags.DEFINE_integer("vid_length", 16, "The length of the videos [16]")
 flags.DEFINE_integer("image_size", 64, "The size of images used [64]")
 flags.DEFINE_integer("output_size", 64, "The size of the output images to produce [64]")
 flags.DEFINE_integer("c_dim", 3, "Dimension of image color. [3]")
-flags.DEFINE_string("image_dataset", "celebA", "The name of dataset [celebA, mnist, lsun]")
+# flags.DEFINE_string("image_dataset", "celebA", "The name of dataset [celebA, mnist, lsun]")
 flags.DEFINE_string("image_model_dir", "checkpoint", "Directory name to load the image checkpoints [checkpoint]")
 # flags.DEFINE_string("video_checkpoint_dir", "checkpoint", "Directory name to save the video checkpoints [checkpoint]")
 flags.DEFINE_string("video_sample_dir", "samples", "Directory name to save the video samples [samples]")
@@ -42,6 +41,8 @@ flags.DEFINE_boolean("is_train", False, "True for training, False for <not imple
 flags.DEFINE_boolean("video_shuffle", True, "True to shuffle the dataset, False otherwise [False]")
 flags.DEFINE_boolean("train_img_gen", False, "True to make the image generator params trainable [False]")
 flags.DEFINE_boolean("train_img_disc", False, "True to make the image discriminator params trainable [False]")
+flags.DEFINE_integer("disc_updates", 1, "Number of discriminator updates per batch [1]")
+flags.DEFINE_integer("gen_updates", 2, "Number of generator updates per batch [1]")
 FLAGS = flags.FLAGS
 
 class Layers(object):
@@ -142,7 +143,7 @@ class VID_DCGAN(object):
         else:
             print "FAIL!"
         
-    def train(self, config):
+    def train(self, sess, config):
         files = []
         for lst in config.video_list:
             with open(lst, 'r') as f:
@@ -160,38 +161,105 @@ class VID_DCGAN(object):
             np.random.shuffle(files)
 
         # Create optimizers
-        print "Creating discriminator optimizers..."
-        d_vars = self.d_vid_vars
-        if config.train_img_disc:
-            d_vars = d_vars + self.d_img_vars
-        d_optim = (tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1)
-                   .minimize(self.d_loss, var_list=d_vars))
+        with tf.variable_scope("optimizers"):
+            print "Creating discriminator optimizers..."
+            d_vars = self.d_vid_vars
+            if config.train_img_disc:
+                d_vars = d_vars + self.d_img_vars
+            d_optim = (tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1)
+                       .minimize(self.d_loss, var_list=d_vars))
 
-        print "Creating generator optimizers..."
-        g_vars = self.g_vid_vars
-        if config.train_img_gen:
-            g_vars = g_vars + self.g_img_vars
-        for v in g_vars:
-            print v.name
-        g_optim = (tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1)
-                   .minimize(self.g_loss, var_list=g_vars))
+            print "Creating generator optimizers..."
+            g_vars = self.g_vid_vars
+            if config.train_img_gen:
+                g_vars = g_vars + self.g_img_vars
+            g_optim = (tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1)
+                       .minimize(self.g_loss, var_list=g_vars))
+
+            # Initialize variables created by optimizers
+            current_scope_name = tf.get_variable_scope().name + "/"
+            scope_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                                           scope=current_scope_name)
+            sess.run(tf.variables_initializer(scope_vars))
 
         sample_z = np.random.uniform(-1, 1, size=(self.sample_rows * self.sample_cols,
                                                   self.z_input_size))
 
-        print "Doing a batch..."
+        # print "Doing a batch..."
+        counter = 0
         batch_size = self.batch_size
         for epoch in xrange(config.epoch):
             for i in xrange(0, len(files) // batch_size):
                 batch_files = files[i*batch_size:(i+1)*batch_size]
-                batch_data = self.load_videos(batch_files)
-                return
+                batch_images = self.load_videos(batch_files)
+                batch_z = np.random.uniform(-1, 1, size=(
+                    self.batch_size, self.z_input_size)).astype(np.float32)
 
+                # Update D
+                d_losses = []
+                for _ in xrange(config.disc_updates):
+                    _, d_loss_value = sess.run([d_optim, self.d_loss], feed_dict={
+                        self.img_dcgan.images: batch_images,
+                        self.z: batch_z
+                    })
+                    d_losses.append(d_loss_value)
+
+                # Update G
+                g_losses = []
+                for _ in xrange(config.gen_updates):
+                    _, g_loss_value = sess.run([g_optim, self.g_loss], feed_dict={
+                        self.z: batch_z
+                    })
+                    g_losses.append(g_loss_value)
+
+                # errD_fake = 0#self.d_loss_fake.eval({self.z: batch_z})
+                # errD_real = 0#self.d_loss_real.eval({self.img_dcgan.images: batch_images})
+                # errG = 0#self.g_loss.eval({self.z: batch_z})
+                counter += 1
+                print("Epoch: [%2d] [%4d/%4d] d_loss: %s, g_loss: %s" \
+                      % (epoch, i, len(files) // batch_size,
+                         d_losses, g_losses))
+
+                if counter % 10 == 0:
+                    self.dump_sample(self.sample_z, sess, config, epoch, i)
+
+    def dump_sample(self, sample_z, sess, config, epoch, idx):
+        sz = self.output_image_size
+        samples = sess.run([self.img_dcgan.sampler],
+            feed_dict={self.z: sample_z}
+        )
+        videos = np.reshape(samples, [self.sample_rows,
+                                      self.sample_cols,
+                                      self.vid_length,
+                                      sz,
+                                      sz,
+                                      self.c_dim])
+        
+        filename = '{}/train_{:02d}_{:04d}.mp4'.format(config.video_sample_dir, epoch, idx)
+        print "Writing samples to", filename
+        w = cv2.VideoWriter(filename,
+                            0x20,
+                            25.0,
+                            (self.sample_cols * sz, self.sample_rows * sz))
+        for t in xrange(self.vid_length):
+            frame = np.zeros(shape=[self.sample_rows * sz,
+                                    self.sample_cols * sz,
+                                    self.c_dim],
+                             dtype=np.uint8)
+            for r in xrange(self.sample_rows):
+                for c in xrange(self.sample_cols):
+                    im = inverse_transform(videos[r,c,t,:,:,:])
+                    im = np.around(im * 255).astype('uint8')
+                    im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+                    frame[r*sz:(r+1)*sz, c*sz:(c+1)*sz, :] = im
+            w.write(frame)
+        w.release()
+                
     def load_videos(self, files):
         n = len(files)
         videos = np.zeros(shape=(n, self.vid_length, self.input_image_size, self.input_image_size, self.c_dim))
         for (i, f) in enumerate(files):
-            print "Reading", f
+            #print "Reading", f
             cap = cv2.VideoCapture(f)
             frame = 0
             while(cap.isOpened() and frame < self.vid_length):
@@ -206,7 +274,7 @@ class VID_DCGAN(object):
                 videos[i,frame,:,:,:] = im
                 frame += 1
             assert frame == self.vid_length
-        return videos
+        return np.reshape(videos, [n*self.vid_length, self.input_image_size, self.input_image_size, self.c_dim])
         
     def generator(self, z, reuse=False, train=True):
         layers = Layers()
@@ -347,8 +415,11 @@ def main(_):
             print "FAKE DISC", sess.run(vid_dcgan.d_fake_out, feed_dict={vid_dcgan.img_dcgan.z:out_val})
             print "REAL DISC", sess.run(vid_dcgan.d_real_out, feed_dict={vid_dcgan.img_dcgan.images:imgs})
 
+            # vid_dcgan.dump_sample(sample_z, sess, FLAGS, 4, 20)
+            # return
+            
             # This doesn't do much yet
-            vid_dcgan.train(FLAGS)
+            vid_dcgan.train(sess, FLAGS)
 
             # # Write the videos out to file
             # print "OK OPENCV"
