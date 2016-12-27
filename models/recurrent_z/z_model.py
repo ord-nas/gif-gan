@@ -33,7 +33,7 @@ flags.DEFINE_string("video_sample_dir", "samples", "Directory name to save the v
 flags.DEFINE_string("video_data_dir", "./data", "Directory to read dataset from")
 flags.DEFINE_string("video_dataset", "", "Name of video dataset to use")
 # Yeah, yeah, this is pretty ugly, but whatever.
-flags._global_parser.add_argument("--video_list", required=True, nargs='+', help="List(s) of videos to use")
+flags._global_parser.add_argument("--video_list", required=False, nargs='*', default=[], help="List(s) of videos to use")
 flags.DEFINE_string("log_dir", "./logs", "Directory to write log files")
 flags.DEFINE_boolean("is_train", False, "True for training, False for <not implemented yet> [False]")
 # flags.DEFINE_boolean("is_crop", False, "True for training, False for testing [False]")
@@ -51,7 +51,7 @@ class Layers(object):
 class VID_DCGAN(object):
     def __init__(self, sess, batch_size, z_input_size, z_output_size, vid_length,
                  input_image_size, output_image_size, c_dim,
-                 sample_rows=8, sample_cols=8):
+                 sample_rows=8, sample_cols=4):
         # Member vars
         self.batch_size = batch_size
         self.z_input_size = z_input_size
@@ -221,19 +221,20 @@ class VID_DCGAN(object):
                 # errG = 0#self.g_loss.eval({self.z: batch_z})
                 counter += 1
                 print("Epoch: [%2d] [%4d/%4d] d_loss: %s, g_loss: %s" \
-                      % (epoch, i, len(files) // batch_size,
+                      % (epoch, i+1, len(files) // batch_size,
                          d_losses, g_losses))
 
                 if counter % 10 == 0:
-                    self.dump_sample(sample_z, sess, config, epoch, i)
+                    # TODO: this should be is_training=False eventually
+                    self.dump_sample(sample_z, sess, config, epoch, i, is_training=True)
                     saver.save(sess,
                                os.path.join(config.video_checkpoint_dir,
                                             "VID_DCGAN.model"),
                                global_step=counter)
 
-    def dump_sample(self, sample_z, sess, config, epoch, idx):
+    def dump_sample(self, sample_z, sess, config, epoch, idx, is_training=False):
         sz = self.output_image_size
-        samples = sess.run([self.img_dcgan.sampler],
+        samples = sess.run([self.img_dcgan.sampler if not is_training else self.img_dcgan.G],
             feed_dict={self.z: sample_z}
         )
         videos = np.reshape(samples, [self.sample_rows,
