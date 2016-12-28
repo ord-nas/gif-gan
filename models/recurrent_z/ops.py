@@ -15,12 +15,14 @@ class batch_norm(object):
             self.name = name
 
     def __call__(self, x, train=True):
+        train = False
         return tf.contrib.layers.batch_norm(x,
                                             decay=self.momentum, 
                                             updates_collections=None,
                                             epsilon=self.epsilon,
                                             scale=True,
-                                            scope=self.name)
+                                            scope=self.name,
+                                            is_training=train)
 
 
 def binary_cross_entropy(preds, targets, name=None):

@@ -42,7 +42,7 @@ flags.DEFINE_boolean("video_shuffle", True, "True to shuffle the dataset, False 
 flags.DEFINE_boolean("train_img_gen", False, "True to make the image generator params trainable [False]")
 flags.DEFINE_boolean("train_img_disc", False, "True to make the image discriminator params trainable [False]")
 flags.DEFINE_integer("disc_updates", 1, "Number of discriminator updates per batch [1]")
-flags.DEFINE_integer("gen_updates", 2, "Number of generator updates per batch [1]")
+flags.DEFINE_integer("gen_updates", 1, "Number of generator updates per batch [1]")
 FLAGS = flags.FLAGS
 
 class Layers(object):
@@ -51,7 +51,7 @@ class Layers(object):
 class VID_DCGAN(object):
     def __init__(self, sess, batch_size, z_input_size, z_output_size, vid_length,
                  input_image_size, output_image_size, c_dim,
-                 sample_rows=8, sample_cols=4):
+                 sample_rows=8, sample_cols=8):
         # Member vars
         self.batch_size = batch_size
         self.z_input_size = z_input_size
@@ -103,10 +103,10 @@ class VID_DCGAN(object):
             print "Scope name:", tf.get_variable_scope().name
             print "Making first discriminator..."
             self.d_real_out, self.d_real_out_logits, self.D_real_layers = self.discriminator(
-                self.img_dcgan.D_activations, reuse=False)
+                self.img_dcgan.images, reuse=False)
             print "Making second discriminator..."
             self.d_fake_out, self.d_fake_out_logits, self.D_fake_layers = self.discriminator(
-                self.img_dcgan.D_activations_, reuse=True)
+                self.img_dcgan.G, reuse=True)
 
         # Define trainable variables
         t_vars = tf.trainable_variables()
@@ -300,48 +300,51 @@ class VID_DCGAN(object):
         s2, s4, s8, s16 = [int(s_power_2/x) for x in [2,4,8,16]]
         k_w = 3
 
-        layers.z_project, layers.g0_w, layers.g0_b = linear(
-            z, s16*f16, 'gvideo_0', with_w=True)
-        print "z_proj:", layers.z_project.get_shape().as_list()
+        layers.out, layers.w, layers.b = linear(
+            z, self.vid_length*self.z_output_size, 'gvideo_0', with_w=True)
+        layers.reshaped_out = tf.reshape(layers.out, [-1, self.z_output_size])
+        # layers.z_project, layers.g0_w, layers.g0_b = linear(
+        #     z, s16*f16, 'gvideo_0', with_w=True)
+        # print "z_proj:", layers.z_project.get_shape().as_list()
 
-        layers.g0 = tf.reshape(layers.z_project, [-1, 1, s16, f16])
-        layers.gr0 = tf.nn.relu(self.g_bn0(layers.g0, train=train))
-        print "gr0:", layers.gr0.get_shape().as_list()
+        # layers.g0 = tf.reshape(layers.z_project, [-1, 1, s16, f16])
+        # layers.gr0 = tf.nn.relu(self.g_bn0(layers.g0, train=train))
+        # print "gr0:", layers.gr0.get_shape().as_list()
 
-        layers.g1, layers.g1_w, layers.g1_b = deconv2d(
-            layers.gr0, [self.batch_size, 1, s8, f8],
-            d_h=1, k_h=1, k_w=k_w, name='gvideo_1', with_w=True)
-        layers.gr1 = tf.nn.relu(self.g_bn1(layers.g1, train=train))
-        print "gr1:", layers.gr1.get_shape().as_list()
-        print "filter:", layers.g1_w.get_shape().as_list()
+        # layers.g1, layers.g1_w, layers.g1_b = deconv2d(
+        #     layers.gr0, [self.batch_size, 1, s8, f8],
+        #     d_h=1, k_h=1, k_w=k_w, name='gvideo_1', with_w=True)
+        # layers.gr1 = tf.nn.relu(self.g_bn1(layers.g1, train=train))
+        # print "gr1:", layers.gr1.get_shape().as_list()
+        # print "filter:", layers.g1_w.get_shape().as_list()
 
-        layers.g2, layers.g2_w, layers.g2_b = deconv2d(
-            layers.gr1, [self.batch_size, 1, s4, f4],
-            d_h=1, k_h=1, k_w=k_w, name='gvideo_2', with_w=True)
-        layers.gr2 = tf.nn.relu(self.g_bn2(layers.g2, train=train))
-        print "gr2:", layers.gr2.get_shape().as_list()
-        print "filter:", layers.g2_w.get_shape().as_list()
+        # layers.g2, layers.g2_w, layers.g2_b = deconv2d(
+        #     layers.gr1, [self.batch_size, 1, s4, f4],
+        #     d_h=1, k_h=1, k_w=k_w, name='gvideo_2', with_w=True)
+        # layers.gr2 = tf.nn.relu(self.g_bn2(layers.g2, train=train))
+        # print "gr2:", layers.gr2.get_shape().as_list()
+        # print "filter:", layers.g2_w.get_shape().as_list()
         
-        layers.g3, layers.g3_w, layers.g3_b = deconv2d(
-            layers.gr2, [self.batch_size, 1, s2, f2],
-            d_h=1, k_h=1, k_w=k_w, name='gvideo_3', with_w=True)
-        layers.gr3 = tf.nn.relu(self.g_bn3(layers.g3, train=train))
-        print "gr3:", layers.gr3.get_shape().as_list()
-        print "filter:", layers.g3_w.get_shape().as_list()
+        # layers.g3, layers.g3_w, layers.g3_b = deconv2d(
+        #     layers.gr2, [self.batch_size, 1, s2, f2],
+        #     d_h=1, k_h=1, k_w=k_w, name='gvideo_3', with_w=True)
+        # layers.gr3 = tf.nn.relu(self.g_bn3(layers.g3, train=train))
+        # print "gr3:", layers.gr3.get_shape().as_list()
+        # print "filter:", layers.g3_w.get_shape().as_list()
 
-        layers.g4, layers.g4_w, layers.g4_b = deconv2d(
-            layers.gr3, [self.batch_size, 1, s, f],
-            d_h=1, k_h=1, k_w=k_w, name='gvideo_4', with_w=True)
-        layers.gr4 = tf.nn.tanh(layers.g4)
-        print "gr4:", layers.gr4.get_shape().as_list()
-        print "filter:", layers.g4_w.get_shape().as_list()
+        # layers.g4, layers.g4_w, layers.g4_b = deconv2d(
+        #     layers.gr3, [self.batch_size, 1, s, f],
+        #     d_h=1, k_h=1, k_w=k_w, name='gvideo_4', with_w=True)
+        # layers.gr4 = tf.nn.tanh(layers.g4)
+        # print "gr4:", layers.gr4.get_shape().as_list()
+        # print "filter:", layers.g4_w.get_shape().as_list()
         
-        layers.gr4_2d = tf.reshape(layers.gr4, [-1, s, f])
-        print "gr4_2d:", layers.gr4_2d.get_shape().as_list()
-        layers.gr4_1d = tf.reshape(layers.gr4, [-1, f])
-        print "gr4_1d:", layers.gr4_1d.get_shape().as_list()
+        # layers.gr4_2d = tf.reshape(layers.gr4, [-1, s, f])
+        # print "gr4_2d:", layers.gr4_2d.get_shape().as_list()
+        # layers.gr4_1d = tf.reshape(layers.gr4, [-1, f])
+        # print "gr4_1d:", layers.gr4_1d.get_shape().as_list()
 
-        return layers.gr4_1d, layers
+        return layers.reshaped_out, layers
 
     def discriminator(self, vid, reuse=False):
         layers = Layers()
@@ -351,35 +354,40 @@ class VID_DCGAN(object):
         # First we wanna just project into a reasonable shape.
         # Squeeze all of the per-frame stuff togther
         print "vid:", vid.get_shape().as_list()
-        vid = tf.reshape(vid, [self.batch_size * self.vid_length, -1])
+        vid = tf.reshape(vid, [self.batch_size, -1])
+        vid = vid[:, ::2]
         print "vid (reshaped):", vid.get_shape().as_list()
 
-        f = self.z_output_size # No reason for it to be this number other than symmetry
-        f, f2, f4, f8, f16 = [int(f*x) for x in np.logspace(math.log10(1),
-                                                            math.log10(2),
-                                                            5)]
-        k_w = 3
+        layers.out1 = lrelu(linear(vid, 1000, 'dvideo_0'))
+        layers.out2 = lrelu(linear(layers.out1, 1, 'dvideo_1'))
+
+        # f = self.z_output_size # No reason for it to be this number other than symmetry
+        # f, f2, f4, f8, f16 = [int(f*x) for x in np.logspace(math.log10(1),
+        #                                                     math.log10(2),
+        #                                                     5)]
+        # k_w = 3
         
-        layers.vid_project, layers.d0_w, layers.d0_b = linear(
-            vid, f, 'dvideo_0', with_w=True)
-        print "vid_project:", layers.vid_project.get_shape().as_list()
+        # layers.vid_project, layers.d0_w, layers.d0_b = linear(
+        #     vid, f, 'dvideo_0', with_w=True)
+        # print "vid_project:", layers.vid_project.get_shape().as_list()
 
-        layers.d0 = tf.reshape(layers.vid_project, [self.batch_size, 1, self.vid_length, -1])
-        layers.dr0 = tf.nn.relu(self.d_bn0(layers.d0))
-        print "dr0:", layers.dr0.get_shape().as_list()
+        # layers.d0 = tf.reshape(layers.vid_project, [self.batch_size, 1, self.vid_length, -1])
+        # layers.dr0 = tf.nn.relu(self.d_bn0(layers.d0))
+        # print "dr0:", layers.dr0.get_shape().as_list()
 
-        layers.dr1 = lrelu(self.d_bn1(conv2d(layers.dr0, f2, k_h=1, k_w=k_w, d_h=1, name='dvideo_h1')))
-        print "dr1:", layers.dr1.get_shape().as_list()
-        layers.dr2 = lrelu(self.d_bn2(conv2d(layers.dr1, f4, k_h=1, k_w=k_w, d_h=1, name='dvideo_h2')))
-        print "dr2:", layers.dr2.get_shape().as_list()
-        layers.dr3 = lrelu(self.d_bn3(conv2d(layers.dr2, f8, k_h=1, k_w=k_w, d_h=1, name='dvideo_h3')))
-        print "dr3:", layers.dr3.get_shape().as_list()
-        layers.dr4 = lrelu(self.d_bn4(conv2d(layers.dr3, f16, k_h=1, k_w=k_w, d_h=1, name='dvideo_h4')))
-        print "dr4:", layers.dr4.get_shape().as_list()
-        layers.d5 = linear(tf.reshape(layers.dr4, [self.batch_size, -1]), 1, 'dvideo_h5')
-        print "d5:", layers.d5.get_shape().as_list()
+        # layers.dr1 = lrelu(self.d_bn1(conv2d(layers.dr0, f2, k_h=1, k_w=k_w, d_h=1, name='dvideo_h1')))
+        # print "dr1:", layers.dr1.get_shape().as_list()
+        # layers.dr2 = lrelu(self.d_bn2(conv2d(layers.dr1, f4, k_h=1, k_w=k_w, d_h=1, name='dvideo_h2')))
+        # print "dr2:", layers.dr2.get_shape().as_list()
+        # layers.dr3 = lrelu(self.d_bn3(conv2d(layers.dr2, f8, k_h=1, k_w=k_w, d_h=1, name='dvideo_h3')))
+        # print "dr3:", layers.dr3.get_shape().as_list()
+        # layers.dr4 = lrelu(self.d_bn4(conv2d(layers.dr3, f16, k_h=1, k_w=k_w, d_h=1, name='dvideo_h4')))
+        # print "dr4:", layers.dr4.get_shape().as_list()
+        # layers.d5 = linear(tf.reshape(layers.dr4, [self.batch_size, -1]), 1, 'dvideo_h5')
+        # print "d5:", layers.d5.get_shape().as_list()
 
-        return tf.nn.sigmoid(layers.d5), layers.d5, layers
+        return tf.nn.sigmoid(layers.out2), layers.out2, layers
+        #return tf.nn.sigmoid(layers.d5), layers.d5, layers
 
 
 def main(_):
