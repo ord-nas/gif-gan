@@ -144,10 +144,12 @@ def make_gif(images, fname, duration=2, true_image=False):
   clip.write_gif(fname, fps = len(images) / duration)
 
 def visualize(sess, dcgan, config, option):
+  np.random.seed(0)
   if option == 0:
-    z_sample = np.random.uniform(-0.5, 0.5, size=(config.batch_size, dcgan.z_dim))
+    z_sample = np.random.uniform(-1, 1, size=(config.batch_size, dcgan.z_dim))
     samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
-    save_images(samples, [8, 8], './samples/test_%s.png' % strftime("%Y-%m-%d %H:%M:%S", gmtime()))
+    save_images(samples, [8, 8], '%s/test_%s.png' % (
+        config.sample_dir, strftime("%Y-%m-%d %H:%M:%S", gmtime())))
   elif option == 1:
     values = np.arange(0, 1, 1./config.batch_size)
     for idx in xrange(100):
