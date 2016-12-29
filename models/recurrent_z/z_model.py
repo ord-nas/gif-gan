@@ -355,11 +355,22 @@ class VID_DCGAN(object):
         # Squeeze all of the per-frame stuff togther
         print "vid:", vid.get_shape().as_list()
         vid = tf.reshape(vid, [self.batch_size, -1])
-        vid = vid[:, ::2]
         print "vid (reshaped):", vid.get_shape().as_list()
 
-        layers.out1 = lrelu(linear(vid, 1000, 'dvideo_0'))
-        layers.out2 = lrelu(linear(layers.out1, 1, 'dvideo_1'))
+        m = self.vid_length * self.output_image_size * self.output_image_size * self.c_dim
+        layers.weights = tf.get_variable("comparison_weights",
+                                         [m],
+                                         tf.float32,
+                                         tf.random_normal_initializer(stddev=0.02))
+        print "layers.weights:", layers.weights.get_shape().as_list()
+        layers.diff = tf.abs(tf.subtract(vid, layers.weights))
+        print "diff:", layers.diff.get_shape().as_list()
+        
+        layers.out = linear(layers.diff, 1, 'dvideo_0')
+        print "out:", layers.out.get_shape().as_list()
+
+        # layers.out1 = lrelu(linear(vid, 1000, 'dvideo_0'))
+        # layers.out2 = lrelu(linear(layers.out1, 1, 'dvideo_1'))
 
         # f = self.z_output_size # No reason for it to be this number other than symmetry
         # f, f2, f4, f8, f16 = [int(f*x) for x in np.logspace(math.log10(1),
@@ -386,7 +397,7 @@ class VID_DCGAN(object):
         # layers.d5 = linear(tf.reshape(layers.dr4, [self.batch_size, -1]), 1, 'dvideo_h5')
         # print "d5:", layers.d5.get_shape().as_list()
 
-        return tf.nn.sigmoid(layers.out2), layers.out2, layers
+        return tf.nn.sigmoid(layers.out), layers.out, layers
         #return tf.nn.sigmoid(layers.d5), layers.d5, layers
 
 
