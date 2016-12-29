@@ -102,7 +102,7 @@ class DCGAN(object):
             self.G = self.generator(self.z)
             self.D, self.D_logits, self.D_activations = self.discriminator(self.images)
 
-            self.sampler = self.sampler(sample_z)
+            self.sampler = self.sampler(self.sample_z)
             self.D_, self.D_logits_, self.D_activations_ = self.discriminator(self.G, reuse=True)
         
 
