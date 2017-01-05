@@ -20,14 +20,48 @@
 	     $("#main-img").attr("src", current.attr("src"));
 	 }
 
+	 function tick() {
+	     var max = $("#seek-slider").slider("option", "max");
+	     var current = $("#seek-slider").slider("value");
+	     current += 1;
+	     if (current > max) {
+		 current = 0;
+	     }
+	     update_seek(current);
+	     $("#seek-slider").slider("value", current);
+	 }
+
 	 $( function() {
+	     var play_interval = null;
 	     $( "button" ).button();
-	     $( "button" ).click( function( event ) {
-		 event.preventDefault();
-	     } );
+	     /* $( "button" ).click( function( event ) {
+		event.preventDefault();
+		} );*/
 	     $( "#loading-message" ).dialog({
 		 modal: true,
 		 autoOpen: false,
+	     });
+	     $("#play").click( function(event) {
+		 fps = parseInt($("#fps").val());
+		 if (isNaN(fps)) {
+		     alert("Can't parse FPS");
+		     return;
+		 }
+		 period = 1000.0 / fps;
+		 if (period < 20) {
+		     alert("FPS too large");
+		     return;
+		 }
+		 if (play_interval) {
+		     return;
+		 }
+		 play_interval = setInterval(tick, period);
+	     });
+	     $("#stop").click( function(event) {
+		 if (play_interval) {
+		     clearInterval(play_interval);
+		     play_interval = null;
+		 }
 	     });
 
 	     $("#step-size-slider").slider({
@@ -74,14 +108,18 @@
 		<div id="step-size-slider"></div>
 		<p id="step-size">Step value: ??</p>
 		<p>Current video description <button class="ui-button ui-widget ui-corner-all">Load</button></p>
-		<textarea id="video-txt" style="width:100%" rows="5">text</textarea>
+		<textarea id="video-txt" style="width:100%" rows="1">text</textarea>
 		<p>Current directions <button class="ui-button ui-widget ui-corner-all">Load</button></p>
-		<textarea id="video-txt" style="width:100%" rows="5">text</textarea>
+		<textarea id="video-txt" style="width:100%" rows="1">text</textarea>
 		<p style="text-align:center">Video so far</p>
 		<img id="main-img" src="media/test.png"
 		     style="display:block;margin-left:auto;margin-right:auto;width:128px;height:128px">
 		<br/>
 		<div id="seek-slider"></div>
+		<br/>
+		<button class="ui-button ui-widget ui-corner-all" id="play">Play</button>
+		<button class="ui-button ui-widget ui-corner-all" id="stop">Stop</button>
+		<label>FPS: <input type="text" id="fps"></label>
 	    </div>
 
 	    <!-- BOTTOM LEFT -->
