@@ -11,7 +11,7 @@
 		 event.preventDefault();
 	     } );
 
-	     var slider = $("#slider").slider({
+	     $("#step-size-slider").slider({
 		 min: 1,
 		 max: 6,
 		 range: "min",
@@ -23,6 +23,19 @@
 		     $("#step-size").text("Step value: " + ui.value);
 		 }
 	     });
+	     $("#seek-slider").slider({
+		 min: 1,
+		 max: 6,
+		 range: "min",
+		 value: 1,
+		 slide: function( event, ui) {
+		     if (ui.value % 2 == 0) {
+			 $("#main-img").attr("src", "media/test_2.png");
+		     } else {
+			 $("#main-img").attr("src", "media/test.png");
+		     }
+		 }
+	     });
 	 } );
 	</script>
     </head>
@@ -30,15 +43,22 @@
 	<!-- LEFT 50% -->
 	<div style="width: 50%; height: 100%; float: left;">
 	    <!-- TOP LEFT -->
-	    <div style="background:red;height:80%;width:100%">
+	    <div style="background:red;height:80%;width:100%;overflow:auto">
 		<button class="ui-button ui-widget ui-corner-all">Random Initial Face</button>
 		<button class="ui-button ui-widget ui-corner-all">Random Directions</button>
 		<br/>
 		<br/>
-		<div id="slider"></div>
+		<div id="step-size-slider"></div>
 		<p id="step-size">Step value: ??</p>
+		<p>Current video description <button class="ui-button ui-widget ui-corner-all">Load</button></p>
+		<textarea id="video-txt" style="width:100%" rows="5">text</textarea>
+		<p>Current directions <button class="ui-button ui-widget ui-corner-all">Load</button></p>
+		<textarea id="video-txt" style="width:100%" rows="5">text</textarea>
+		<p style="text-align:center">Video so far</p>
+		<img id="main-img" src="media/test.png"
+		     style="display:block;margin-left:auto;margin-right:auto;width:128px;height:128px">
 		<br/>
-		<button class="ui-button ui-widget ui-corner-all">BLAH</button>
+		<div id="seek-slider"></div>
 	    </div>
 
 	    <!-- BOTTOM LEFT -->
