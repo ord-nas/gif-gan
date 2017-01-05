@@ -5,13 +5,18 @@
 	<script src="https://code.jquery.com/jquery-1.12.4.js"></script>
 	<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
 	<script>
+	 var height = 64;
+	 var width = 64;
+	 var border = 5;
+	 var margin = 15;
+
 	 function update_seek(value) {
 	     var current = $("#timeline img").eq(value);
 	     current.css({
 		 "border-style":"solid",
-		 "border-width":"5px",
+		 "border-width":border+"px",
 		 "border-color":"yellow",
-		 "margin":"10px",
+		 "margin":(margin-border)+"px",
 	     });
 	     $("#timeline img").not(current).css({
 		 "border-style":"none",
@@ -29,6 +34,35 @@
 	     }
 	     update_seek(current);
 	     $("#seek-slider").slider("value", current);
+	 }
+
+	 function run_test() {
+	     $( "#loading-message" ).dialog("open");
+	     $.getJSON("test_success", {}, update_everything);
+	 }
+
+	 function update_everything(data, status, unused) {
+	     $( "#loading-message" ).dialog("close");
+	     if (data["response"] == "error") {
+		 alert("Error! " + data["msg"]);
+	     }
+	     msg = data["msg"]
+	     $("#video-txt").val(msg["video_zs"]);
+	     $("#directions-txt").val(msg["directions"]);
+	     var timeline = $("#timeline");
+	     timeline.empty();
+	     $.each(msg["video_paths"], function(i, value) {
+		 $('<img>').attr("src", value).css({
+		     "width": width + "px",
+		     "height": height + "px",
+		     "float": "left",
+		     "margin": margin + "px",
+		 }).appendTo(timeline);
+	     });
+	     var n = msg["video_paths"].length;
+	     $("#seek-slider").slider("option", "max", n-1);
+	     $("#seek-slider").slider("value", n-1);
+	     update_seek(n-1);
 	 }
 
 	 $( function() {
@@ -110,7 +144,7 @@
 		<p>Current video description <button class="ui-button ui-widget ui-corner-all">Load</button></p>
 		<textarea id="video-txt" style="width:100%" rows="1">text</textarea>
 		<p>Current directions <button class="ui-button ui-widget ui-corner-all">Load</button></p>
-		<textarea id="video-txt" style="width:100%" rows="1">text</textarea>
+		<textarea id="directions-txt" style="width:100%" rows="1">text</textarea>
 		<p style="text-align:center">Video so far</p>
 		<img id="main-img" src="media/test.png"
 		     style="display:block;margin-left:auto;margin-right:auto;width:128px;height:128px">
