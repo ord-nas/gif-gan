@@ -4,6 +4,7 @@ import argparse
 import tensorflow as tf
 import numpy as np
 import os
+import time
 
 parser = argparse.ArgumentParser()
 # Input/output params
@@ -29,11 +30,13 @@ class ServerState(object):
 @route('/test/<n>')
 def test(n):
     global state
+    start = time.time()
     sess = state.sess
     dcgan = state.dcgan
     n = int(n)
     imgs = run_inference(sess, dcgan, np.random.uniform(-1.0, 1.0, size=(n, dcgan.z_dim)))
-    return template("<p>Got {{x}} images!</p>", x=len(imgs))
+    end = time.time()
+    return template("<p>Got {{x}} images in {{t}} seconds!</p>", x=len(imgs), t=end-start)
 
 @route('/index.html')
 def index():
