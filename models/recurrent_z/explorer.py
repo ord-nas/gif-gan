@@ -15,6 +15,7 @@ parser.add_argument("--num_steps", type=int, default=4, help="How many steps to 
 parser.add_argument("--image_size", type=int, default=64, help="Size of images used")
 parser.add_argument("--output_size", type=int, default=64, help="Size of output images")
 parser.add_argument("--c_dim", type=int, default=3, help="Dimension of image colour")
+parser.add_argument("--port", type=int, default=8080, help="Port to use")
 
 class ServerState(object):
     def __init__(self, sess, args, dcgan):
@@ -86,7 +87,7 @@ def main():
     def media(filename):
         return static_file(filename, root=args.tmp_directory)
 
-    run(host='localhost', port=8080)
+    run(host='localhost', port=args.port)
 
 if __name__ == "__main__":
     main()
