@@ -6,21 +6,23 @@ import matplotlib.pyplot as plt
 num_epochs = 100
 total_series_length = 100000
 truncated_backprop_length = 15
-state_size = 4
 num_classes = 2
 image_dimension = 8
 image_size = image_dimension * image_dimension
+# state_size = 2 * image_size * num_classes
+state_size = image_size * num_classes
 echo_step = 3
 batch_size = 5
 num_batches = total_series_length//batch_size//truncated_backprop_length
 
 def generateData():
-    x = np.array(np.random.choice(2, total_series_length, p=[0.5, 0.5]))
-    y = np.roll(x, echo_step)
-    y[0:echo_step] = 0
+    x = np.array(np.random.choice(2, total_series_length * image_size, p=[0.5, 0.5]))
+    y = np.roll(x, echo_step * image_size)
+    y[0:echo_step * image_size] = 0
+    # y = np.array(np.random.choice(2, total_series_length * image_size, p=[0.5, 0.5]))
 
-    x = np.repeat(x, image_size, axis = 0)
-    y = np.repeat(y, image_size, axis = 0)
+    # x = np.repeat(x, image_size, axis = 0)
+    # y = np.repeat(y, image_size, axis = 0)
 
     x = x.reshape((batch_size, -1, image_size))  # The first index changing slowest, subseries as rows
     y = y.reshape((batch_size, -1, image_size))
@@ -58,42 +60,43 @@ def plot_loss(loss_list):
 batchX_placeholder = tf.placeholder(tf.float32, [batch_size, truncated_backprop_length, image_size])
 batchY_placeholder = tf.placeholder(tf.int32, [batch_size, truncated_backprop_length, image_size])
 
-init_state = tf.placeholder(tf.float32, [batch_size, image_size * num_classes])
+init_state = tf.placeholder(tf.float32, [batch_size, state_size])
 
-# W2 = tf.Variable(np.random.rand(state_size, num_classes),dtype=tf.float32)
-# b2 = tf.Variable(np.zeros((1, image_size, num_classes)), dtype=tf.float32)
+W2 = tf.Variable(np.random.rand(state_size, image_size * num_classes),dtype=tf.float32)
+b2 = tf.Variable(np.zeros((1, image_size * num_classes)), dtype=tf.float32)
 
 # Unpack columns
 inputs_series = tf.unpack(batchX_placeholder, axis=1)
 labels_series = tf.unpack(batchY_placeholder, axis=1)
 
-print ("Input Shape:")
-print (inputs_series[0].get_shape())
-print ("")
+# print ("Input Shape:")
+# print (inputs_series[0].get_shape())
+# print ("")
 
 # Forward passes
-cell = tf.nn.rnn_cell.BasicRNNCell(image_size * num_classes)
+cell = tf.nn.rnn_cell.BasicRNNCell(state_size)
 states_series, current_state = tf.nn.rnn(cell, inputs_series, init_state)
 
-print ("State Shape:")
-print (states_series[0].get_shape())
-print ("")
+# print ("State Shape:")
+# print (states_series[0].get_shape())
+# print ("")
 
-logits_series = [tf.reshape(state, [batch_size, image_size, num_classes]) for state in states_series] #Broadcasted addition
+logits_series = [tf.reshape(tf.matmul(state, W2) + b2, [batch_size, image_size, num_classes]) for state in states_series] #Broadcasted addition
+# logits_series = [tf.reshape(state, [batch_size, image_size, num_classes]) for state in states_series] #Broadcasted addition
 
-print ("Logit Shape:")
-print (logits_series[0].get_shape())
-print ("")
+# print ("Logit Shape:")
+# print (logits_series[0].get_shape())
+# print ("")
 
 predictions_series = [tf.nn.softmax(logits) for logits in logits_series]
 
-print ("Prediction Shape:")
-print (logits_series[0].get_shape())
-print ("")
+# print ("Prediction Shape:")
+# print (logits_series[0].get_shape())
+# print ("")
 
-print ("Label Shape:")
-print (labels_series[0].get_shape())
-print ("")
+# print ("Label Shape:")
+# print (labels_series[0].get_shape())
+# print ("")
 
 losses = [tf.nn.sparse_softmax_cross_entropy_with_logits(logits, labels) for logits, labels in zip(logits_series,labels_series)]
 total_loss = tf.reduce_mean(losses)
@@ -109,7 +112,7 @@ with tf.Session() as sess:
 
     for epoch_idx in range(num_epochs):
         x,y = generateData()
-        _current_state = np.zeros((batch_size, image_size * num_classes))
+        _current_state = np.zeros((batch_size, state_size))
 
         print("New data, epoch", epoch_idx)
 
