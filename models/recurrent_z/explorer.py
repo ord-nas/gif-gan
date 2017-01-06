@@ -1,4 +1,4 @@
-from bottle import route, run, template, static_file
+from bottle import route, run, template, static_file, request
 from model import DCGAN
 import argparse
 import tensorflow as tf
@@ -25,10 +25,10 @@ class ServerState(object):
         self.sess = sess
         self.args = args
         self.dcgan = dcgan
-        self.video_zs = []
-        self.video_imgs = []
-        self.directions = []
-        self.direction_imgs = []
+        self.video_zs = [] # list of 1d numpy array
+        self.video_paths = [] # list of strings
+        self.directions = None # 2d numpy array
+        self.direction_paths = [] # list of list of strings
         self.counter = 0
         self.response = None
 
@@ -104,6 +104,70 @@ def test(n):
     imgs = run_inference(sess, dcgan, np.random.uniform(-1.0, 1.0, size=(n, dcgan.z_dim)))
     end = time.time()
     return template("<p>Got {{x}} images in {{t}} seconds!</p>", x=len(imgs), t=end-start)
+
+def update_direction_imgs(state, step_size):
+    if state.directions is None or not state.video_zs:
+        return
+    assert state.directions.shape == (state.args.num_directions, state.dcgan.z_dim)
+    step_size = float(step_size)
+    last_z = state.video_zs[-1]
+    zs = np.array([[last_z] * state.args.num_steps] * state.args.num_directions)
+    for d in xrange(state.args.num_directions):
+        for s in xrange(state.args.num_steps):
+            zs[d][s] += state.directions[d] * step_size * (s+1)
+    zs = np.maximum(-1.0, np.minimum(1.0, zs))
+    zs = np.reshape(zs, [state.args.num_steps * state.args.num_directions,
+                         state.dcgan.z_dim])
+    imgs = run_inference(state.sess, state.dcgan, zs)
+    paths = np.array([write_img(im, state.args.tmp_directory, state) for im in imgs])
+    state.direction_paths = np.reshape(paths, [state.args.num_directions,
+                                               state.args.num_steps]).tolist()
+
+@route('/init_face')
+def init_face():
+    global state
+    step_size = request.params.get('step_size')
+    state.video_zs = [np.random.uniform(-1.0, 1.0, size=(state.dcgan.z_dim,))]
+    imgs = run_inference(state.sess, state.dcgan, state.video_zs)
+    state.video_paths = [write_img(imgs[0], state.args.tmp_directory, state)]
+    update_direction_imgs(state, step_size)
+    return get_response(state)
+
+@route('/init_directions')
+def init_directions():
+    global state
+    step_size = request.params.get('step_size')
+    directions = np.random.uniform(-1.0, 1.0, size=(state.args.num_directions,
+                                                    state.dcgan.z_dim))
+    norms = np.sqrt(np.sum(np.square(directions), axis=1, keepdims=True))
+    state.directions = np.divide(directions, norms)
+    update_direction_imgs(state, step_size)
+    return get_response(state)
+
+@route('/clear_directions')
+def clear_directions():
+    global state
+    state.directions = None
+    state.direction_paths = []
+    return get_response(state)
+
+@route('/update_step_size')
+def update_step_size():
+    global state
+    step_size = request.params.get('step_size')
+    update_direction_imgs(state, step_size)
+    return get_response(state)
+
+def get_response(state):
+    return {
+        "response": "success",
+        "msg": {
+            "video_zs": repr(state.video_zs),
+            "video_paths": state.video_paths,
+            "directions": repr(state.directions),
+            "direction_paths": state.direction_paths,
+        }
+    }
 
 @route('/index.html')
 def index():

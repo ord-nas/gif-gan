@@ -9,6 +9,8 @@
 	 var width = 64;
 	 var border = 5;
 	 var margin = 15;
+	 var min_step = 0.1;
+	 var max_step = 1.0;
 
 	 function update_seek(value) {
 	     var current = $("#timeline img").eq(value);
@@ -36,15 +38,20 @@
 	     $("#seek-slider").slider("value", current);
 	 }
 
-	 function run_test() {
-	     $( "#loading-message" ).dialog("open");
-	     $.getJSON("test_success", {}, update_everything);
+	 function request(url, params) {
+	     $("#loading-message").dialog("open");
+	     $.getJSON(url, params, update_everything);
 	 }
+	 
+	 /* function run_test() {
+	    $( "#loading-message" ).dialog("open");
+	    $.getJSON("test_success", {}, update_everything);
+	    }
 
-	 function run_last() {
-	     $( "#loading-message" ).dialog("open");
-	     $.getJSON("test_last", {}, update_everything);
-	 }
+	    function run_last() {
+	    $( "#loading-message" ).dialog("open");
+	    $.getJSON("test_last", {}, update_everything);
+	    }*/
 
 	 function update_everything(data, status, unused) {
 	     $( "#loading-message" ).dialog("close");
@@ -99,6 +106,21 @@
 	     }
 	 }
 
+	 function get_slider_value(input_val) {
+	     var slider = $("#step-size-slider");
+	     if (input_val == undefined) {
+		 input_val = slider.slider("value");
+	     }
+	     var min_log = Math.log(min_step);
+	     var max_log = Math.log(max_step);
+	     var min_val = slider.slider("option", "min");
+	     var max_val = slider.slider("option", "max");
+	     var delta_val = max_val - min_val;
+	     var delta_log = max_log - min_log;
+	     var current_log = (input_val - min_val) * (delta_log / delta_val) + min_log;
+	     return Math.pow(Math.E, current_log)
+	 }
+	 
 	 $( function() {
 	     var play_interval = null;
 	     $( "button" ).button();
@@ -131,20 +153,40 @@
 		     play_interval = null;
 		 }
 	     });
-	     $("#test").click(run_test);
-	     $("#last").click(run_last);
+	     $("#test").click(function() {
+		 request("test_success", {});
+	     });
+	     $("#last").click(function() {
+		 request("test_last", {});
+	     });
+	     $("#init_face").click(function() {
+		 request("init_face", {
+		     "step_size": get_slider_value(),
+		 });
+	     });
+	     $("#init_directions").click(function() {
+		 request("init_directions", {
+		     "step_size": get_slider_value(),
+		 });
+	     });
+	     $("#clear_directions").click(function() {
+		 request("clear_directions", {});
+	     });
 
 	     $("#step-size-slider").slider({
-		 min: 1,
-		 max: 6,
-		 range: "min",
-		 value: 1,
+		 min: 0,
+		 max: 100,
+		 value: 0,
 		 stop: function( event, ui ) {
-		     $( "#loading-message" ).dialog("open");
-		     setTimeout(function() { $( "#loading-message" ).dialog("close"); }, 1000);
+		     request("update_step_size", {
+			 "step_size": get_slider_value(),
+		     });
+		     /* $( "#loading-message" ).dialog("open");
+			setTimeout(function() { $( "#loading-message" ).dialog("close"); }, 1000);*/
 		 },
 		 slide: function( event, ui) {
-		     $("#step-size").text("Step value: " + ui.value);
+		     value = get_slider_value(ui.value);
+		     $("#step-size").text("Step value: " + value);
 		 }
 	     });
 	     $("#seek-slider").slider({
@@ -171,8 +213,9 @@
 	<div style="width: 45%; height: 100%; float: left;">
 	    <!-- TOP LEFT -->
 	    <div style="background:red;height:75%;width:100%;overflow:auto">
-		<button class="ui-button ui-widget ui-corner-all">Random Initial Face</button>
-		<button class="ui-button ui-widget ui-corner-all">Random Directions</button>
+		<button class="ui-button ui-widget ui-corner-all" id="init_face">Random Initial Face</button>
+		<button class="ui-button ui-widget ui-corner-all" id="init_directions">Random Directions</button>
+		<button class="ui-button ui-widget ui-corner-all" id="clear_directions">Clear Directions</button>
 		<button class="ui-button ui-widget ui-corner-all" id="test">Test</button>
 		<button class="ui-button ui-widget ui-corner-all" id="last">Last</button>
 		<br/>
