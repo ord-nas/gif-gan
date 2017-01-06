@@ -15,6 +15,8 @@ parser.add_argument("--tmp_directory", default="/tmp/DCGAN_server_dir", help="Di
 parser.add_argument("--batch_size", type=int, default=64, help="Batch size to use internally to generate images")
 parser.add_argument("--num_directions", type=int, default=16, help="How many different z-space directions to show")
 parser.add_argument("--num_steps", type=int, default=4, help="How many steps to take in each direction")
+parser.add_argument("--initial_face_rows", type=int, default=8, help="How many rows of faces when choosing initial face")
+parser.add_argument("--initial_face_cols", type=int, default=8, help="How many cols of faces when choosing initial face")
 parser.add_argument("--image_size", type=int, default=64, help="Size of images used")
 parser.add_argument("--output_size", type=int, default=64, help="Size of output images")
 parser.add_argument("--c_dim", type=int, default=3, help="Dimension of image colour")
@@ -28,7 +30,8 @@ class ServerState(object):
         self.video_zs = [] # list of 1d numpy array
         self.video_paths = [] # list of strings
         self.directions = None # 2d numpy array
-        self.direction_paths = [] # list of list of strings
+        self.direction_zs = None # 3d numpy array, direction_zs[direction,step,z_dim]
+        self.direction_paths = [] # list of list of strings, direction_paths[direction][step]
         self.counter = 0
         self.response = None
 
@@ -105,6 +108,13 @@ def test(n):
     end = time.time()
     return template("<p>Got {{x}} images in {{t}} seconds!</p>", x=len(imgs), t=end-start)
 
+def update_direction_paths(state):
+    (rows, cols, z_dim) = state.direction_zs.shape
+    zs = np.reshape(state.direction_zs, [rows * cols, z_dim])
+    imgs = run_inference(state.sess, state.dcgan, zs)
+    paths = np.array([write_img(im, state.args.tmp_directory, state) for im in imgs])
+    state.direction_paths = np.reshape(paths, [rows, cols]).tolist()
+
 def update_direction_imgs(state, step_size):
     if state.directions is None or not state.video_zs:
         return
@@ -116,12 +126,8 @@ def update_direction_imgs(state, step_size):
         for s in xrange(state.args.num_steps):
             zs[d][s] += state.directions[d] * step_size * (s+1)
     zs = np.maximum(-1.0, np.minimum(1.0, zs))
-    zs = np.reshape(zs, [state.args.num_steps * state.args.num_directions,
-                         state.dcgan.z_dim])
-    imgs = run_inference(state.sess, state.dcgan, zs)
-    paths = np.array([write_img(im, state.args.tmp_directory, state) for im in imgs])
-    state.direction_paths = np.reshape(paths, [state.args.num_directions,
-                                               state.args.num_steps]).tolist()
+    state.direction_zs = zs
+    update_direction_paths(state)
 
 @route('/init_face')
 def init_face():
@@ -148,6 +154,7 @@ def init_directions():
 def clear_directions():
     global state
     state.directions = None
+    state.direction_zs = None
     state.direction_paths = []
     return get_response(state)
 
@@ -156,6 +163,18 @@ def update_step_size():
     global state
     step_size = request.params.get('step_size')
     update_direction_imgs(state, step_size)
+    return get_response(state)
+
+@route('/choose_init_face')
+def choose_init_face():
+    global state
+    state.video_zs = []
+    state.video_paths = []
+    state.directions = None
+    state.direction_zs = np.random.uniform(-1.0, 1.0, size=(state.args.initial_face_rows,
+                                                            state.args.initial_face_cols,
+                                                            state.dcgan.z_dim))
+    update_direction_paths(state)
     return get_response(state)
 
 def get_response(state):
@@ -172,6 +191,10 @@ def get_response(state):
 @route('/index.html')
 def index():
     return static_file('index.html', root='explorer_static')
+
+@route('/blank.jpg')
+def index():
+    return static_file('blank.jpg', root='explorer_static')
 
 def load_dcgan(sess, args):
     dcgan = DCGAN(sess,

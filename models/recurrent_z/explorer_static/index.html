@@ -77,9 +77,15 @@
 		 }).appendTo(timeline);
 	     });
 	     var n = msg["video_paths"].length;
-	     $("#seek-slider").slider("option", "max", n-1);
-	     $("#seek-slider").slider("value", n-1);
-	     update_seek(n-1);
+	     if (n > 0) {
+		 $("#seek-slider").slider("option", "disabled", false);
+		 $("#seek-slider").slider("option", "max", n-1);
+		 $("#seek-slider").slider("value", n-1);
+		 update_seek(n-1);
+	     } else {
+		 $("#seek-slider").slider("option", "disabled", true);
+		 $("#main-img").attr("src", "blank.jpg");
+	     }
 
 	     // Update selector
 	     var selector = $("#selector");
@@ -150,8 +156,8 @@
 		     play_interval = null;
 		 }
 	     });
-	     $("#test").click(function() {
-		 request("test_success", {});
+	     $("#choose_init_face").click(function() {
+		 request("choose_init_face", {});
 	     });
 	     $("#last").click(function() {
 		 request("test_last", {});
@@ -182,7 +188,7 @@
 			setTimeout(function() { $( "#loading-message" ).dialog("close"); }, 1000);*/
 		 },
 		 slide: function( event, ui) {
-		     value = get_slider_value(ui.value);
+		     var value = get_slider_value(ui.value);
 		     $("#step-size").text("Step value: " + value);
 		 }
 	     });
@@ -195,6 +201,9 @@
 		     update_seek(ui.value);
 		 }
 	     });
+
+	     var value = get_slider_value();
+	     $("#step-size").text("Step value: " + value);
 	 } );
 	</script>
     </head>
@@ -209,25 +218,25 @@
 	<!-- LEFT 50% -->
 	<div style="width: 45%; height: 100%; float: left;">
 	    <!-- TOP LEFT -->
-	    <div style="background:red;height:75%;width:100%;overflow:auto">
+	    <div style="height:75%;width:100%;overflow:auto">
 		<button class="ui-button ui-widget ui-corner-all" id="init_face">Random Initial Face</button>
 		<button class="ui-button ui-widget ui-corner-all" id="init_directions">Random Directions</button>
 		<button class="ui-button ui-widget ui-corner-all" id="clear_directions">Clear Directions</button>
-		<button class="ui-button ui-widget ui-corner-all" id="test">Test</button>
+		<button class="ui-button ui-widget ui-corner-all" id="choose_init_face">Random Grid of Faces</button>
 		<button class="ui-button ui-widget ui-corner-all" id="last">Last</button>
 		<br/>
 		<br/>
-		<div id="step-size-slider"></div>
+		<div id="step-size-slider" style="margin-left:50px;margin-right:50px"></div>
 		<p id="step-size">Step value: ??</p>
 		<p>Current video description <button class="ui-button ui-widget ui-corner-all">Load</button></p>
 		<textarea id="video-txt" style="width:100%" rows="1">text</textarea>
 		<p>Current directions <button class="ui-button ui-widget ui-corner-all">Load</button></p>
 		<textarea id="directions-txt" style="width:100%" rows="1">text</textarea>
 		<p style="text-align:center">Video so far</p>
-		<img id="main-img" src="media/test.png"
+		<img id="main-img" src="blank.jpg"
 		     style="display:block;margin-left:auto;margin-right:auto;width:128px;height:128px">
 		<br/>
-		<div id="seek-slider"></div>
+		<div id="seek-slider" style="margin-left:50px;margin-right:50px"></div>
 		<br/>
 		<button class="ui-button ui-widget ui-corner-all" id="play">Play</button>
 		<button class="ui-button ui-widget ui-corner-all" id="stop">Stop</button>
@@ -235,144 +244,14 @@
 	    </div>
 
 	    <!-- BOTTOM LEFT -->
-	    <div style="background:green;height:25%;width:100%;overflow:auto">
+	    <div style="height:25%;width:100%;overflow:auto">
 		<div id="timeline">
-		    <img src="media/test.png" style="width:64px;height:64px;float:left;border-style:solid;border-width:5px;border-color:yellow;margin:10px">
-		    <img src="media/test_2.png" style="width:64px;height:64px;float:left;margin:15px">
-		    <img src="media/test.png" style="width:64px;height:64px;float:left;margin:15px">
-		    <img src="media/test_2.png" style="width:64px;height:64px;float:left;margin:15px">
-		    <img src="media/test.png" style="width:64px;height:64px;float:left;margin:15px">
-		    <img src="media/test_2.png" style="width:64px;height:64px;float:left;margin:15px">
-		    <img src="media/test.png" style="width:64px;height:64px;float:left;margin:15px">
-		    <img src="media/test_2.png" style="width:64px;height:64px;float:left;margin:15px">
-		    <img src="media/test.png" style="width:64px;height:64px;float:left;margin:15px">
-		    <img src="media/test_2.png" style="width:64px;height:64px;float:left;margin:15px">
-		    <img src="media/test.png" style="width:64px;height:64px;float:left;margin:15px">
-		    <img src="media/test_2.png" style="width:64px;height:64px;float:left;margin:15px">
-		    <img src="media/test.png" style="width:64px;height:64px;float:left;margin:15px">
-		    <img src="media/test_2.png" style="width:64px;height:64px;float:left;margin:15px">
-		    <img src="media/test.png" style="width:64px;height:64px;float:left;margin:15px">
-		    <img src="media/test_2.png" style="width:64px;height:64px;float:left;margin:15px">
 		</div>
 	    </div>
 	</div>
 
 	<!-- RIGHT 50% -->
-	<div id="selector" style="width:45%;height:100%;float:right;background:blue;overflow:auto">
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-	    <div style="width:296px;height:74px">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
-	    </div>
-
-
-
+	<div id="selector" style="width:45%;height:100%;float:right;overflow:auto">
 	</div>
     </body>
 </html>
