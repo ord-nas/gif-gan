@@ -111,14 +111,11 @@
 	     if (input_val == undefined) {
 		 input_val = slider.slider("value");
 	     }
-	     var min_log = Math.log(min_step);
-	     var max_log = Math.log(max_step);
 	     var min_val = slider.slider("option", "min");
 	     var max_val = slider.slider("option", "max");
 	     var delta_val = max_val - min_val;
-	     var delta_log = max_log - min_log;
-	     var current_log = (input_val - min_val) * (delta_log / delta_val) + min_log;
-	     return Math.pow(Math.E, current_log)
+	     var delta_step = max_step - min_step;
+	     return (input_val - min_val) * (delta_step / delta_val) + min_step;
 	 }
 	 
 	 $( function() {
