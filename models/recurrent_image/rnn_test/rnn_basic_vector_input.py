@@ -9,8 +9,8 @@ truncated_backprop_length = 15
 num_classes = 2
 image_dimension = 8
 image_size = image_dimension * image_dimension
-# state_size = 2 * image_size * num_classes
-state_size = image_size * num_classes
+state_size = 4 * image_size * num_classes
+# state_size = image_size * num_classes
 echo_step = 3
 batch_size = 5
 num_batches = total_series_length//batch_size//truncated_backprop_length
@@ -60,7 +60,9 @@ def plot_loss(loss_list):
 batchX_placeholder = tf.placeholder(tf.float32, [batch_size, truncated_backprop_length, image_size])
 batchY_placeholder = tf.placeholder(tf.int32, [batch_size, truncated_backprop_length, image_size])
 
-init_state = tf.placeholder(tf.float32, [batch_size, state_size])
+cell_state = tf.placeholder(tf.float32, [batch_size, state_size])
+hidden_state = tf.placeholder(tf.float32, [batch_size, state_size])
+init_state = tf.nn.rnn_cell.LSTMStateTuple(cell_state, hidden_state)
 
 W2 = tf.Variable(np.random.rand(state_size, image_size * num_classes),dtype=tf.float32)
 b2 = tf.Variable(np.zeros((1, image_size * num_classes)), dtype=tf.float32)
@@ -74,7 +76,7 @@ labels_series = tf.unpack(batchY_placeholder, axis=1)
 # print ("")
 
 # Forward passes
-cell = tf.nn.rnn_cell.BasicRNNCell(state_size)
+cell = tf.nn.rnn_cell.BasicLSTMCell(state_size, state_is_tuple=True)
 states_series, current_state = tf.nn.rnn(cell, inputs_series, init_state)
 
 # print ("State Shape:")
@@ -112,7 +114,8 @@ with tf.Session() as sess:
 
     for epoch_idx in range(num_epochs):
         x,y = generateData()
-        _current_state = np.zeros((batch_size, state_size))
+        _current_cell_state = np.zeros((batch_size, state_size))
+        _current_hidden_state = np.zeros((batch_size, state_size))
 
         print("New data, epoch", epoch_idx)
 
@@ -126,10 +129,14 @@ with tf.Session() as sess:
             _total_loss, _train_step, _current_state, _predictions_series = sess.run(
                 [total_loss, train_step, current_state, predictions_series],
                 feed_dict={
-                    batchX_placeholder:batchX,
-                    batchY_placeholder:batchY,
-                    init_state:_current_state
+                    batchX_placeholder: batchX,
+                    batchY_placeholder: batchY,
+                    cell_state: _current_cell_state,
+                    hidden_state: _current_hidden_state
+
                 })
+
+            _current_cell_state, _current_hidden_state = _current_state
 
             loss_list.append(_total_loss)
 
