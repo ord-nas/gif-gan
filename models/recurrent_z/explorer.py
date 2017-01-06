@@ -30,6 +30,7 @@ class ServerState(object):
         self.directions = []
         self.direction_imgs = []
         self.counter = 0
+        self.response = None
 
 def write_img(im, tmp_dir, state):
     im = inverse_transform(im)
@@ -48,6 +49,16 @@ def write_img(im, tmp_dir, state):
 #   directions: string of textified numpy array
 #   direction_paths: 2d list of strings (paths to images)
 
+@route('/test_last')
+def test_last():
+    global state
+    if not state.response:
+        return {
+            "response": "error",
+            "msg": "No last response value!",
+        }
+    return state.response
+
 @route('/test_success')
 def test_success():
     global state
@@ -65,7 +76,7 @@ def test_success():
     direction_imgs = run_inference(sess, dcgan, direction_zs)
     direction_paths = np.array([write_img(im, args.tmp_directory, state) for im in direction_imgs])
     direction_paths = np.reshape(direction_paths, (num_directions, num_steps)).tolist()
-    return {
+    state.response = {
         "response": "success",
         "msg": {
             "video_zs": repr(video_zs),
@@ -74,6 +85,7 @@ def test_success():
             "direction_paths": direction_paths,
         }
     }
+    return state.response
 
 @route('/test_error')
 def test_error():
