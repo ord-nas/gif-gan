@@ -131,7 +131,7 @@ class VID_DCGAN(object):
         if ckpt and ckpt.model_checkpoint_path:
             ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
             d = {}
-            for v in tf.global_variables():
+            for v in tf.all_variables():
                 n = v.op.name
                 prefix = self.image_gan_scope_name
                 if not n.startswith(prefix):
@@ -374,7 +374,8 @@ class VID_DCGAN(object):
         print "dr2:", layers.dr2.get_shape().as_list()
         layers.dr3 = lrelu(self.d_bn3(conv2d(layers.dr2, f8, k_h=1, k_w=k_w, d_h=1, name='dvideo_h3')))
         print "dr3:", layers.dr3.get_shape().as_list()
-        layers.dr4 = lrelu(self.d_bn4(conv2d(layers.dr3, f16, k_h=1, k_w=k_w, d_h=1, name='dvideo_h4')))
+        layers.dr4 = lrelu(self.d_bn4(conv2d(layers.dr3, f16, k_h=1, k_w=k_w-1, #HACK, DO NOT COMMIT!
+                                             d_h=1, name='dvideo_h4')))
         print "dr4:", layers.dr4.get_shape().as_list()
         layers.d5 = linear(tf.reshape(layers.dr4, [self.batch_size, -1]), 1, 'dvideo_h5')
         print "d5:", layers.d5.get_shape().as_list()
@@ -403,7 +404,7 @@ def main(_):
             print "DONE"
 
             # Init vars
-            sess.run(tf.global_variables_initializer())
+            sess.run(tf.initialize_all_variables())
 
             # Load image model weights. This needs to happen *after* init, so
             # that we don't overwrite the weights we load.
@@ -412,41 +413,96 @@ def main(_):
             # Generate some z-vectors for one video.
             sample_z = np.random.uniform(-1, 1, size=(FLAGS.vid_batch_size, vid_z_dim))
             out_val = sess.run(vid_dcgan.G, feed_dict={vid_dcgan.z:sample_z})
-            print out_val.shape
+            out_val_mean = np.mean(out_val, axis=0)
+            out_val_std = np.std(out_val, axis=0)
+            expected_std = 2.0 / np.sqrt(12.0)
+            out_val_normalized = (out_val - out_val_mean) / out_val_std * expected_std
+            out_val_normalized2 = (out_val - out_val_mean) / out_val_std
+            out_val_normalized3 = (out_val - out_val_mean) / out_val_std * expected_std * 0.7
+            print "out_val", out_val.shape
+            print "out_val_normalized", out_val_normalized.shape
+            print "mean", np.mean(out_val_normalized, axis=0)
+            print "std", np.std(out_val_normalized, axis=0)
+            print "expected std", expected_std
 
             # Generate videos from the z-vectors
-            imgs = sess.run(vid_dcgan.img_dcgan.sampler, feed_dict={vid_dcgan.img_dcgan.sample_z:out_val})
-            vids = np.reshape(imgs, (-1, FLAGS.vid_length, FLAGS.output_size, FLAGS.output_size, FLAGS.c_dim))
-            print imgs.shape
-            print vids.shape
+            imgs_G = sess.run(vid_dcgan.img_dcgan.G, feed_dict={vid_dcgan.img_dcgan.z:out_val})
+            vids_G = np.reshape(imgs_G, (-1, FLAGS.vid_length, FLAGS.output_size, FLAGS.output_size, FLAGS.c_dim))
+            print imgs_G.shape
+            print vids_G.shape
 
             # Test the discriminator
             print "FAKE DISC", sess.run(vid_dcgan.d_fake_out, feed_dict={vid_dcgan.img_dcgan.z:out_val})
-            print "REAL DISC", sess.run(vid_dcgan.d_real_out, feed_dict={vid_dcgan.img_dcgan.images:imgs})
+            print "REAL DISC", sess.run(vid_dcgan.d_real_out, feed_dict={vid_dcgan.img_dcgan.images:imgs_G})
 
             # vid_dcgan.dump_sample(sample_z, sess, FLAGS, 4, 20)
             # return
             
-            vid_dcgan.train(sess, FLAGS)
+            #vid_dcgan.train(sess, FLAGS)
 
-            # # Write the videos out to file
-            # print "OK OPENCV"
-            # for i in xrange(vids.shape[0]):
-            #     filename = "/thesis0/yccggrp/youngsan/tmp2/video_%05d.mp4" % i
-            #     # filename = "/thesis0/yccggrp/youngsan/tmp/video_%05d" % i
-            #     print "Writing to", filename
-            #     w = cv2.VideoWriter(filename,
-            #                         0x20,
-            #                         25.0,
-            #                         (FLAGS.output_size, FLAGS.output_size))
-            #     for j in xrange(vids.shape[1]):
-            #         im = inverse_transform(vids[i][j])
-            #         im = np.around(im * 255).astype('uint8')
-            #         im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
-            #         w.write(im)
-            #         #cv2.imwrite(filename + ("_%02d" % j) + ".png", im)
-            #     w.release()
-            # print "DONE WRITING FILES"
+            # Write the videos out to file
+            print "OK OPENCV"
+            for i in xrange(vids_G.shape[0]):
+                filename = "does_this_still_work/video_%05d" % i
+                for j in xrange(vids_G.shape[1]):
+                    im = inverse_transform(vids_G[i][j])
+                    im = np.around(im * 255).astype('uint8')
+                    im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+                    cv2.imwrite(filename + ("_%02d_G" % j) + ".png", im)
+
+            imgs_G = None
+            vids_G = None
+            imgs_normed = sess.run(vid_dcgan.img_dcgan.sampler, feed_dict={vid_dcgan.img_dcgan.sample_z:out_val_normalized})
+            vids_normed = np.reshape(imgs_normed, (-1, FLAGS.vid_length, FLAGS.output_size, FLAGS.output_size, FLAGS.c_dim))
+
+            for i in xrange(vids_normed.shape[0]):
+                filename = "does_this_still_work/video_%05d" % i
+                for j in xrange(vids_normed.shape[1]):
+                    im = inverse_transform(vids_normed[i][j])
+                    im = np.around(im * 255).astype('uint8')
+                    im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+                    cv2.imwrite(filename + ("_%02d_normed" % j) + ".png", im)
+
+            imgs_normed = None
+            vids_normed = None
+            imgs_normed2 = sess.run(vid_dcgan.img_dcgan.sampler, feed_dict={vid_dcgan.img_dcgan.sample_z:out_val_normalized2})
+            vids_normed2 = np.reshape(imgs_normed2, (-1, FLAGS.vid_length, FLAGS.output_size, FLAGS.output_size, FLAGS.c_dim))
+
+            for i in xrange(vids_normed2.shape[0]):
+                filename = "does_this_still_work/video_%05d" % i
+                for j in xrange(vids_normed2.shape[1]):
+                    im = inverse_transform(vids_normed2[i][j])
+                    im = np.around(im * 255).astype('uint8')
+                    im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+                    cv2.imwrite(filename + ("_%02d_normed2" % j) + ".png", im)
+
+            imgs_normed2 = None
+            vids_normed2 = None
+            imgs_normed3 = sess.run(vid_dcgan.img_dcgan.sampler, feed_dict={vid_dcgan.img_dcgan.sample_z:out_val_normalized3})
+            vids_normed3 = np.reshape(imgs_normed3, (-1, FLAGS.vid_length, FLAGS.output_size, FLAGS.output_size, FLAGS.c_dim))
+
+            for i in xrange(vids_normed3.shape[0]):
+                filename = "does_this_still_work/video_%05d" % i
+                for j in xrange(vids_normed3.shape[1]):
+                    im = inverse_transform(vids_normed3[i][j])
+                    im = np.around(im * 255).astype('uint8')
+                    im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+                    cv2.imwrite(filename + ("_%02d_normed3" % j) + ".png", im)
+
+            imgs_normed3 = None
+            vids_normed3 = None
+            imgs_sampler = sess.run(vid_dcgan.img_dcgan.sampler, feed_dict={vid_dcgan.img_dcgan.sample_z:out_val})
+            vids_sampler = np.reshape(imgs_sampler, (-1, FLAGS.vid_length, FLAGS.output_size, FLAGS.output_size, FLAGS.c_dim))
+
+            for i in xrange(vids_sampler.shape[0]):
+                filename = "does_this_still_work/video_%05d" % i
+                for j in xrange(vids_sampler.shape[1]):
+                    im = inverse_transform(vids_sampler[i][j])
+                    im = np.around(im * 255).astype('uint8')
+                    im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+                    cv2.imwrite(filename + ("_%02d_sampler" % j) + ".png", im)
+
+            print "DONE WRITING FILES"
 
 if __name__ == '__main__':
     tf.app.run()
