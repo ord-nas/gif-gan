@@ -5,6 +5,8 @@ import tensorflow as tf
 import numpy as np
 import os
 import time
+from utils import inverse_transform
+import cv2
 
 parser = argparse.ArgumentParser()
 # Input/output params
@@ -23,9 +25,74 @@ class ServerState(object):
         self.sess = sess
         self.args = args
         self.dcgan = dcgan
+        self.video_zs = []
         self.video_imgs = []
-        self.directions = None
-        self.start = None
+        self.directions = []
+        self.direction_imgs = []
+        self.counter = 0
+        self.response = None
+
+def write_img(im, tmp_dir, state):
+    im = inverse_transform(im)
+    im = np.around(im * 255).astype('uint8')
+    im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+    filename = "img_%d.png" % state.counter
+    cv2.imwrite(os.path.join(tmp_dir, filename), im)
+    state.counter += 1
+    return os.path.join("media/", filename)
+
+# Format of response:
+# response: either "success" or "error"
+# msg: either an error message or a dictionary of:
+#   video_zs: string of textified numpy array
+#   video_paths: 1d list of strings (paths to images)
+#   directions: string of textified numpy array
+#   direction_paths: 2d list of strings (paths to images)
+
+@route('/test_last')
+def test_last():
+    global state
+    if not state.response:
+        return {
+            "response": "error",
+            "msg": "No last response value!",
+        }
+    return state.response
+
+@route('/test_success')
+def test_success():
+    global state
+    sess = state.sess
+    dcgan = state.dcgan
+    args = state.args
+    num_frames = np.random.randint(4,25)
+    video_zs = np.random.uniform(-1.0, 1.0, size=(num_frames, dcgan.z_dim))
+    video_imgs = run_inference(sess, dcgan, video_zs)
+    video_paths = [write_img(im, args.tmp_directory, state) for im in video_imgs]
+    num_directions = np.random.randint(4,17)
+    num_steps = np.random.randint(4,17)
+    directions = np.random.uniform(-0.1, 0.1, size=(num_directions, dcgan.z_dim))
+    direction_zs = np.random.uniform(-1.0, 1.0, size=(num_directions * num_steps, dcgan.z_dim))
+    direction_imgs = run_inference(sess, dcgan, direction_zs)
+    direction_paths = np.array([write_img(im, args.tmp_directory, state) for im in direction_imgs])
+    direction_paths = np.reshape(direction_paths, (num_directions, num_steps)).tolist()
+    state.response = {
+        "response": "success",
+        "msg": {
+            "video_zs": repr(video_zs),
+            "video_paths": video_paths,
+            "directions": repr(direction_zs),
+            "direction_paths": direction_paths,
+        }
+    }
+    return state.response
+
+@route('/test_error')
+def test_error():
+    return {
+        "response": "error",
+        "msg": "This is an emulation of an error",
+    }
 
 @route('/test/<n>')
 def test(n):
@@ -80,6 +147,9 @@ def main():
     sess = tf.Session()
     dcgan = load_dcgan(sess, args)
     state = ServerState(sess, args, dcgan)
+
+    # Configure numpy to print full arrays
+    np.set_printoptions(threshold=np.nan)
 
     # Make tmp directory
     if not os.path.exists(args.tmp_directory):

@@ -5,13 +5,18 @@
 	<script src="https://code.jquery.com/jquery-1.12.4.js"></script>
 	<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
 	<script>
+	 var height = 64;
+	 var width = 64;
+	 var border = 5;
+	 var margin = 15;
+
 	 function update_seek(value) {
 	     var current = $("#timeline img").eq(value);
 	     current.css({
 		 "border-style":"solid",
-		 "border-width":"5px",
+		 "border-width":border+"px",
 		 "border-color":"yellow",
-		 "margin":"10px",
+		 "margin":(margin-border)+"px",
 	     });
 	     $("#timeline img").not(current).css({
 		 "border-style":"none",
@@ -29,6 +34,69 @@
 	     }
 	     update_seek(current);
 	     $("#seek-slider").slider("value", current);
+	 }
+
+	 function run_test() {
+	     $( "#loading-message" ).dialog("open");
+	     $.getJSON("test_success", {}, update_everything);
+	 }
+
+	 function run_last() {
+	     $( "#loading-message" ).dialog("open");
+	     $.getJSON("test_last", {}, update_everything);
+	 }
+
+	 function update_everything(data, status, unused) {
+	     $( "#loading-message" ).dialog("close");
+	     if (data["response"] == "error") {
+		 alert("Error! " + data["msg"]);
+		 return;
+	     }
+	     msg = data["msg"]
+
+	     // Update textareas
+	     $("#video-txt").val(msg["video_zs"]);
+	     $("#directions-txt").val(msg["directions"]);
+
+	     // Update timeline
+	     var timeline = $("#timeline");
+	     timeline.empty();
+	     $.each(msg["video_paths"], function(i, value) {
+		 $('<img>').attr("src", value).css({
+		     "width": width + "px",
+		     "height": height + "px",
+		     "float": "left",
+		     "margin": margin + "px",
+		 }).appendTo(timeline);
+	     });
+	     var n = msg["video_paths"].length;
+	     $("#seek-slider").slider("option", "max", n-1);
+	     $("#seek-slider").slider("value", n-1);
+	     update_seek(n-1);
+
+	     // Update selector
+	     var selector = $("#selector");
+	     selector.empty();
+	     rows = msg["direction_paths"].length;
+	     cols = msg["direction_paths"][0].length;
+	     row_width = (width+2*margin)*cols;
+	     row_height = height+2*margin;
+	     for (r = 0; r < rows; r++) {
+		 row_div = $('<div>').css({
+		     "width": row_width + "px",
+		     "height": row_height + "px",
+		 });
+		 for (c = 0; c < cols; c++) {
+		     src = msg["direction_paths"][r][c];
+		     $('<img>').attr("src", src).css({
+			 "width": width + "px",
+			 "height": height + "px",
+			 "float": "left",
+			 "margin": margin + "px",
+		     }).appendTo(row_div);
+		 }
+		 row_div.appendTo(selector);
+	     }
 	 }
 
 	 $( function() {
@@ -63,6 +131,8 @@
 		     play_interval = null;
 		 }
 	     });
+	     $("#test").click(run_test);
+	     $("#last").click(run_last);
 
 	     $("#step-size-slider").slider({
 		 min: 1,
@@ -103,6 +173,8 @@
 	    <div style="background:red;height:75%;width:100%;overflow:auto">
 		<button class="ui-button ui-widget ui-corner-all">Random Initial Face</button>
 		<button class="ui-button ui-widget ui-corner-all">Random Directions</button>
+		<button class="ui-button ui-widget ui-corner-all" id="test">Test</button>
+		<button class="ui-button ui-widget ui-corner-all" id="last">Last</button>
 		<br/>
 		<br/>
 		<div id="step-size-slider"></div>
@@ -110,7 +182,7 @@
 		<p>Current video description <button class="ui-button ui-widget ui-corner-all">Load</button></p>
 		<textarea id="video-txt" style="width:100%" rows="1">text</textarea>
 		<p>Current directions <button class="ui-button ui-widget ui-corner-all">Load</button></p>
-		<textarea id="video-txt" style="width:100%" rows="1">text</textarea>
+		<textarea id="directions-txt" style="width:100%" rows="1">text</textarea>
 		<p style="text-align:center">Video so far</p>
 		<img id="main-img" src="media/test.png"
 		     style="display:block;margin-left:auto;margin-right:auto;width:128px;height:128px">
@@ -146,7 +218,7 @@
 	</div>
 
 	<!-- RIGHT 50% -->
-	<div style="width:45%;height:100%;float:right;background:blue;overflow:auto">
+	<div id="selector" style="width:45%;height:100%;float:right;background:blue;overflow:auto">
 	    <div style="width:296px;height:74px">
 		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
 		<img src="media/test.png" style="width:64px;height:64px;margin:5px;float:left;">
