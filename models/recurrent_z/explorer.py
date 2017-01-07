@@ -7,6 +7,7 @@ import os
 import time
 from utils import inverse_transform
 import cv2
+import sys
 
 parser = argparse.ArgumentParser()
 # Input/output params
@@ -36,12 +37,12 @@ class ServerState(object):
         self.counter = 0
         self.response = None
 
-def write_img(im, tmp_dir, state):
+def write_img(im, state):
     im = inverse_transform(im)
     im = np.around(im * 255).astype('uint8')
     im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
     filename = "img_%d.png" % state.counter
-    cv2.imwrite(os.path.join(tmp_dir, filename), im)
+    cv2.imwrite(os.path.join(state.args.tmp_directory, filename), im)
     state.counter += 1
     return os.path.join("media/", filename)
 
@@ -72,13 +73,13 @@ def test_success():
     num_frames = np.random.randint(4,25)
     video_zs = np.random.uniform(-1.0, 1.0, size=(num_frames, dcgan.z_dim))
     video_imgs = run_inference(sess, dcgan, video_zs)
-    video_paths = [write_img(im, args.tmp_directory, state) for im in video_imgs]
+    video_paths = [write_img(im, state) for im in video_imgs]
     num_directions = np.random.randint(4,17)
     num_steps = np.random.randint(4,17)
     directions = np.random.uniform(-0.1, 0.1, size=(num_directions, dcgan.z_dim))
     direction_zs = np.random.uniform(-1.0, 1.0, size=(num_directions * num_steps, dcgan.z_dim))
     direction_imgs = run_inference(sess, dcgan, direction_zs)
-    direction_paths = np.array([write_img(im, args.tmp_directory, state) for im in direction_imgs])
+    direction_paths = np.array([write_img(im, state) for im in direction_imgs])
     direction_paths = np.reshape(direction_paths, (num_directions, num_steps)).tolist()
     state.response = {
         "response": "success",
@@ -113,7 +114,7 @@ def update_direction_paths(state):
     (rows, cols, z_dim) = state.direction_zs.shape
     zs = np.reshape(state.direction_zs, [rows * cols, z_dim])
     imgs = run_inference(state.sess, state.dcgan, zs)
-    paths = np.array([write_img(im, state.args.tmp_directory, state) for im in imgs])
+    paths = np.array([write_img(im, state) for im in imgs])
     state.direction_paths = np.reshape(paths, [rows, cols]).tolist()
 
 def update_direction_imgs(state, step_size):
@@ -137,7 +138,7 @@ def init_face():
     step_size = request.params.get('step_size')
     state.video_zs = [np.random.uniform(-1.0, 1.0, size=(state.dcgan.z_dim,))]
     imgs = run_inference(state.sess, state.dcgan, state.video_zs)
-    state.video_paths = [write_img(imgs[0], state.args.tmp_directory, state)]
+    state.video_paths = [write_img(imgs[0], state)]
     update_direction_imgs(state, step_size)
     return get_response(state)
 
@@ -206,6 +207,34 @@ def delete_image():
         update_direction_imgs(state, step_size)
     return get_response(state)
 
+@route('/load_video_description')
+def load_video_description():
+    global state
+    description = request.params.get('description');
+    step_size = request.params.get('step_size')
+    try:
+        from numpy import array
+        obj = eval(description) # Shut up, this doesn't need to be secure.
+        for x in obj:
+            if x.shape != (state.dcgan.z_dim,):
+                raise Exception("z-dim doesn't match")
+            if np.max(x) > 1.0 or np.min(x) < -1.0:
+                raise Exception("value(s) out of range")
+        state.video_zs = obj
+        imgs = run_inference(state.sess, state.dcgan, state.video_zs)
+        state.video_paths = [write_img(im, state) for im in imgs]
+        update_direction_imgs(state, step_size)
+        return get_response(state)
+    except:
+        e = sys.exc_info()[1]
+        return get_error("Problem parsing video description: %s" % e)
+
+def get_error(msg):
+    return {
+        "response": "error",
+        "msg": msg,
+    }
+    
 def get_response(state):
     return {
         "response": "success",

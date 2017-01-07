@@ -68,7 +68,6 @@
 
 	     // Update textareas
 	     $("#video-txt").val(msg["video_zs"]);
-	     $("#directions-txt").val(msg["directions"]);
 
 	     // Update timeline
 	     var timeline = $("#timeline");
@@ -165,9 +164,6 @@
 	     $("#choose_init_face").click(function() {
 		 request("choose_init_face", {});
 	     });
-	     $("#last").click(function() {
-		 request("test_last", {});
-	     });
 	     $("#init_face").click(function() {
 		 request("init_face", {
 		     "step_size": get_slider_value(),
@@ -180,6 +176,12 @@
 	     });
 	     $("#clear_directions").click(function() {
 		 request("clear_directions", {});
+	     });
+	     $("#load").click(function() {
+		 request("load_video_description", {
+		     "description": $("#video-txt").val(),
+		     "step_size": get_slider_value(),
+		 });
 	     });
 
 	     $("#step-size-slider").slider({
@@ -223,19 +225,18 @@
 	<div style="width: 45%; height: 100%; float: left;">
 	    <!-- TOP LEFT -->
 	    <div style="height:75%;width:100%;overflow:auto">
-		<button class="ui-button ui-widget ui-corner-all" id="init_face">Random Initial Face</button>
+		<button class="ui-button ui-widget ui-corner-all" id="choose_init_face">Random Initial Faces</button>
 		<button class="ui-button ui-widget ui-corner-all" id="init_directions">Random Directions</button>
 		<button class="ui-button ui-widget ui-corner-all" id="clear_directions">Clear Directions</button>
-		<button class="ui-button ui-widget ui-corner-all" id="choose_init_face">Random Grid of Faces</button>
-		<button class="ui-button ui-widget ui-corner-all" id="last">Last</button>
 		<br/>
 		<br/>
 		<div id="step-size-slider" style="margin-left:50px;margin-right:50px"></div>
 		<p id="step-size">Step value: ??</p>
-		<p>Current video description <button class="ui-button ui-widget ui-corner-all">Load</button></p>
+		<p>Current video description
+		    <button class="ui-button ui-widget ui-corner-all" id="load">Load</button>
+		    <button class="ui-button ui-widget ui-corner-all" id="load_relative">Load Relative</button>
+		</p>
 		<textarea id="video-txt" style="width:100%" rows="1">text</textarea>
-		<p>Current directions <button class="ui-button ui-widget ui-corner-all">Load</button></p>
-		<textarea id="directions-txt" style="width:100%" rows="1">text</textarea>
 		<p style="text-align:center">Video so far</p>
 		<img id="main-img" src="blank.jpg"
 		     style="display:block;margin-left:auto;margin-right:auto;width:128px;height:128px">
