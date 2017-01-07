@@ -42,17 +42,15 @@
 	     $("#loading-message").dialog("open");
 	     $.getJSON(url, params, update_everything);
 	 }
+
+	 function add_image_request(row, col) {
+	     request("add_image", {
+		 "row": row,
+		 "col": col,
+		 "step_size": get_slider_value(),
+	     });
+	 }
 	 
-	 /* function run_test() {
-	    $( "#loading-message" ).dialog("open");
-	    $.getJSON("test_success", {}, update_everything);
-	    }
-
-	    function run_last() {
-	    $( "#loading-message" ).dialog("open");
-	    $.getJSON("test_last", {}, update_everything);
-	    }*/
-
 	 function update_everything(data, status, unused) {
 	     $( "#loading-message" ).dialog("close");
 	     if (data["response"] == "error") {
@@ -106,7 +104,9 @@
 			 "height": height + "px",
 			 "float": "left",
 			 "margin": margin + "px",
-		     }).appendTo(row_div);
+		     }).appendTo(row_div).click(
+			 add_image_request.bind(this, r, c)
+		     );
 		 }
 		 row_div.appendTo(selector);
 	     }
@@ -127,9 +127,6 @@
 	 $( function() {
 	     var play_interval = null;
 	     $( "button" ).button();
-	     /* $( "button" ).click( function( event ) {
-		event.preventDefault();
-		} );*/
 	     $( "#loading-message" ).dialog({
 		 modal: true,
 		 autoOpen: false,
@@ -184,8 +181,6 @@
 		     request("update_step_size", {
 			 "step_size": get_slider_value(),
 		     });
-		     /* $( "#loading-message" ).dialog("open");
-			setTimeout(function() { $( "#loading-message" ).dialog("close"); }, 1000);*/
 		 },
 		 slide: function( event, ui) {
 		     var value = get_slider_value(ui.value);

@@ -32,6 +32,7 @@ class ServerState(object):
         self.directions = None # 2d numpy array
         self.direction_zs = None # 3d numpy array, direction_zs[direction,step,z_dim]
         self.direction_paths = [] # list of list of strings, direction_paths[direction][step]
+        self.add_individually = False
         self.counter = 0
         self.response = None
 
@@ -127,6 +128,7 @@ def update_direction_imgs(state, step_size):
             zs[d][s] += state.directions[d] * step_size * (s+1)
     zs = np.maximum(-1.0, np.minimum(1.0, zs))
     state.direction_zs = zs
+    state.add_individually = False
     update_direction_paths(state)
 
 @route('/init_face')
@@ -174,7 +176,21 @@ def choose_init_face():
     state.direction_zs = np.random.uniform(-1.0, 1.0, size=(state.args.initial_face_rows,
                                                             state.args.initial_face_cols,
                                                             state.dcgan.z_dim))
+    state.add_individually = True
     update_direction_paths(state)
+    return get_response(state)
+
+@route('/add_image')
+def add_image():
+    global state
+    row = int(request.params.get('row'))
+    col = int(request.params.get('col'))
+    step_size = request.params.get('step_size')
+    cols = [col] if state.add_individually else range(col+1)
+    for c in cols:
+        state.video_zs.append(state.direction_zs[row,c,:])
+        state.video_paths.append(state.direction_paths[row][c])
+    update_direction_imgs(state, step_size)
     return get_response(state)
 
 def get_response(state):
