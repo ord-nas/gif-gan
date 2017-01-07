@@ -50,6 +50,13 @@
 		 "step_size": get_slider_value(),
 	     });
 	 }
+
+	 function delete_image_request(i) {
+	     request("delete_image", {
+		 "index": i,
+		 "step_size": get_slider_value(),
+	     });
+	 }
 	 
 	 function update_everything(data, status, unused) {
 	     $( "#loading-message" ).dialog("close");
@@ -72,7 +79,9 @@
 		     "height": height + "px",
 		     "float": "left",
 		     "margin": margin + "px",
-		 }).appendTo(timeline);
+		 }).appendTo(timeline).click(
+		     delete_image_request.bind(this, i)
+		 );
 	     });
 	     var n = msg["video_paths"].length;
 	     if (n > 0) {

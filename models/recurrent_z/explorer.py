@@ -193,6 +193,19 @@ def add_image():
     update_direction_imgs(state, step_size)
     return get_response(state)
 
+@route('/delete_image')
+def delete_image():
+    global state
+    index = int(request.params.get('index'))
+    step_size = request.params.get('step_size')
+    last = (index == len(state.video_zs) - 1)
+    if index >= 0 and index < len(state.video_zs):
+        state.video_zs.pop(index)
+        state.video_paths.pop(index)
+    if last:
+        update_direction_imgs(state, step_size)
+    return get_response(state)
+
 def get_response(state):
     return {
         "response": "success",
