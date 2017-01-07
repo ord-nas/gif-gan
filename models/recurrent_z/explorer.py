@@ -236,7 +236,7 @@ def load_video_description():
 def load_relative_video_description():
     global state
     if not state.video_zs:
-        return error("Need at least one existing video frame to load relative")
+        return get_error("Need at least one existing video frame to load relative")
     description = request.params.get('description');
     step_size = request.params.get('step_size')
     try:
