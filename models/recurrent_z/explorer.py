@@ -121,7 +121,7 @@ def update_direction_imgs(state, step_size):
     if state.directions is None or not state.video_zs:
         return
     assert state.directions.shape == (state.args.num_directions, state.dcgan.z_dim)
-    step_size = float(step_size)
+    step_size = step_size
     last_z = state.video_zs[-1]
     zs = np.array([[last_z] * state.args.num_steps] * state.args.num_directions)
     for d in xrange(state.args.num_directions):
@@ -135,7 +135,7 @@ def update_direction_imgs(state, step_size):
 @route('/init_face')
 def init_face():
     global state
-    step_size = request.params.get('step_size')
+    step_size = float(request.params.get('step_size'))
     state.video_zs = [np.random.uniform(-1.0, 1.0, size=(state.dcgan.z_dim,))]
     imgs = run_inference(state.sess, state.dcgan, state.video_zs)
     state.video_paths = [write_img(imgs[0], state)]
@@ -145,7 +145,7 @@ def init_face():
 @route('/init_directions')
 def init_directions():
     global state
-    step_size = request.params.get('step_size')
+    step_size = float(request.params.get('step_size'))
     directions = np.random.uniform(-1.0, 1.0, size=(state.args.num_directions,
                                                     state.dcgan.z_dim))
     norms = np.sqrt(np.sum(np.square(directions), axis=1, keepdims=True))
@@ -164,7 +164,7 @@ def clear_directions():
 @route('/update_step_size')
 def update_step_size():
     global state
-    step_size = request.params.get('step_size')
+    step_size = float(request.params.get('step_size'))
     update_direction_imgs(state, step_size)
     return get_response(state)
 
@@ -186,7 +186,7 @@ def add_image():
     global state
     row = int(request.params.get('row'))
     col = int(request.params.get('col'))
-    step_size = request.params.get('step_size')
+    step_size = float(request.params.get('step_size'))
     cols = [col] if state.add_individually else range(col+1)
     for c in cols:
         state.video_zs.append(state.direction_zs[row,c,:])
@@ -194,11 +194,43 @@ def add_image():
     update_direction_imgs(state, step_size)
     return get_response(state)
 
+@route('/get_similar')
+def get_similar():
+    global state
+    row = int(request.params.get('row'))
+    col = int(request.params.get('col'))
+    step_size = float(request.params.get('step_size'))
+    similarity = float(request.params.get('similarity'))
+    if state.add_individually:
+        initial = state.direction_zs[row,col,:]
+        deltas = np.random.uniform(-1.0, 1.0, size=(state.args.initial_face_rows,
+                                                    state.args.initial_face_cols,
+                                                    state.dcgan.z_dim))
+        norms = np.sqrt(np.sum(np.square(deltas), axis=1, keepdims=True))
+        deltas = np.divide(deltas, norms) * similarity
+        deltas[0,0,:] = 0.0 # Top left should be the initial faces
+        zs = initial + deltas
+        state.direction_zs = np.maximum(-1.0, np.minimum(1.0, zs))
+        update_direction_paths(state)
+        return get_response(state)
+    else:
+        initial = state.directions[row,:]
+        deltas = np.random.uniform(-1.0, 1.0, size=(state.args.num_directions,
+                                                    state.dcgan.z_dim))
+        norms = np.sqrt(np.sum(np.square(deltas), axis=1, keepdims=True))
+        deltas = np.divide(deltas, norms) * similarity
+        deltas[0,:] = 0.0 # Top should be identical faces
+        directions = initial + deltas
+        direction_norms = np.sqrt(np.sum(np.square(directions), axis=1, keepdims=True))
+        state.directions = np.divide(directions, direction_norms)
+        update_direction_imgs(state, step_size)
+        return get_response(state)
+
 @route('/delete_image')
 def delete_image():
     global state
     index = int(request.params.get('index'))
-    step_size = request.params.get('step_size')
+    step_size = float(request.params.get('step_size'))
     last = (index == len(state.video_zs) - 1)
     if index >= 0 and index < len(state.video_zs):
         state.video_zs.pop(index)
@@ -220,8 +252,8 @@ def parse_video_description(description, state):
 @route('/load_video_description')
 def load_video_description():
     global state
-    description = request.params.get('description');
-    step_size = request.params.get('step_size')
+    description = request.params.get('description')
+    step_size = float(request.params.get('step_size'))
     try:
         state.video_zs = parse_video_description(description, state)
         imgs = run_inference(state.sess, state.dcgan, state.video_zs)
@@ -237,8 +269,8 @@ def load_relative_video_description():
     global state
     if not state.video_zs:
         return get_error("Need at least one existing video frame to load relative")
-    description = request.params.get('description');
-    step_size = request.params.get('step_size')
+    description = request.params.get('description')
+    step_size = float(request.params.get('step_size'))
     try:
         abs_d = parse_video_description(description, state)
         rel_d = [np.subtract(x, abs_d[0]) for x in abs_d]

@@ -11,6 +11,8 @@
 	 var margin = 15;
 	 var min_step = 0.1;
 	 var max_step = 1.0;
+	 var min_sim = 0.01;
+	 var max_sim = 0.50;
 
 	 function update_seek(value) {
 	     var current = $("#timeline img").eq(value);
@@ -43,18 +45,20 @@
 	     $.getJSON(url, params, update_everything);
 	 }
 
-	 function add_image_request(row, col) {
-	     request("add_image", {
+	 function click_image_request(row, col) {
+	     var action = $("[name='click_action']:checked").val();
+	     request(action, {
 		 "row": row,
 		 "col": col,
-		 "step_size": get_slider_value(),
+		 "step_size": get_step_size(),
+		 "similarity": get_sim_value(),
 	     });
 	 }
 
 	 function delete_image_request(i) {
 	     request("delete_image", {
 		 "index": i,
-		 "step_size": get_slider_value(),
+		 "step_size": get_step_size(),
 	     });
 	 }
 	 
@@ -97,7 +101,7 @@
 	     var selector = $("#selector");
 	     selector.empty();
 	     rows = msg["direction_paths"].length;
-	     cols = msg["direction_paths"][0].length;
+	     cols = rows > 0 ? msg["direction_paths"][0].length : 0;
 	     row_width = (width+2*margin)*cols;
 	     row_height = height+2*margin;
 	     for (r = 0; r < rows; r++) {
@@ -113,14 +117,14 @@
 			 "float": "left",
 			 "margin": margin + "px",
 		     }).appendTo(row_div).click(
-			 add_image_request.bind(this, r, c)
+			 click_image_request.bind(this, r, c)
 		     );
 		 }
 		 row_div.appendTo(selector);
 	     }
 	 }
 
-	 function get_slider_value(input_val) {
+	 function get_step_size(input_val) {
 	     var slider = $("#step-size-slider");
 	     if (input_val == undefined) {
 		 input_val = slider.slider("value");
@@ -130,6 +134,18 @@
 	     var delta_val = max_val - min_val;
 	     var delta_step = max_step - min_step;
 	     return (input_val - min_val) * (delta_step / delta_val) + min_step;
+	 }
+
+	 function get_sim_value(input_val) {
+	     var slider = $("#similarity-slider");
+	     if (input_val == undefined) {
+		 input_val = slider.slider("value");
+	     }
+	     var min_val = slider.slider("option", "min");
+	     var max_val = slider.slider("option", "max");
+	     var delta_val = max_val - min_val;
+	     var delta_sim = max_sim - min_sim;
+	     return (input_val - min_val) * (delta_sim / delta_val) + min_sim;
 	 }
 	 
 	 $( function() {
@@ -166,12 +182,12 @@
 	     });
 	     $("#init_face").click(function() {
 		 request("init_face", {
-		     "step_size": get_slider_value(),
+		     "step_size": get_step_size(),
 		 });
 	     });
 	     $("#init_directions").click(function() {
 		 request("init_directions", {
-		     "step_size": get_slider_value(),
+		     "step_size": get_step_size(),
 		 });
 	     });
 	     $("#clear_directions").click(function() {
@@ -180,13 +196,13 @@
 	     $("#load").click(function() {
 		 request("load_video_description", {
 		     "description": $("#video-txt").val(),
-		     "step_size": get_slider_value(),
+		     "step_size": get_step_size(),
 		 });
 	     });
 	     $("#load_relative").click(function() {
 		 request("load_relative_video_description", {
 		     "description": $("#video-txt").val(),
-		     "step_size": get_slider_value(),
+		     "step_size": get_step_size(),
 		 });
 	     });
 
@@ -196,13 +212,22 @@
 		 value: 0,
 		 stop: function( event, ui ) {
 		     request("update_step_size", {
-			 "step_size": get_slider_value(),
+			 "step_size": get_step_size(),
 		     });
 		 },
 		 slide: function( event, ui) {
-		     var value = get_slider_value(ui.value);
-		     $("#step-size").text("Step value: " + value);
+		     var value = get_step_size(ui.value);
+		     $("#step-size").text("Step value: " + value.toFixed(4));
 		 }
+	     });
+	     $("#similarity-slider").slider({
+		 min: 0,
+		 max: 100,
+		 value: 0,
+		 slide: function( event, ui) {
+		     var value = get_sim_value(ui.value);
+		     $("#similarity").text("Similarity value: " + value.toFixed(4));
+		 },
 	     });
 	     $("#seek-slider").slider({
 		 min: 0,
@@ -214,8 +239,13 @@
 		 }
 	     });
 
-	     var value = get_slider_value();
-	     $("#step-size").text("Step value: " + value);
+	     var step_size = get_step_size();
+	     $("#step-size").text("Step value: " + step_size.toFixed(4));
+	     var similarity_value = get_sim_value();
+	     $("#similarity").text("Similarity value: " + similarity_value.toFixed(4));
+
+	     $("[name='click_action']").checkboxradio();
+	     $("#add_image").prop("checked", true).trigger("change");
 	 } );
 	</script>
     </head>
@@ -236,8 +266,23 @@
 		<button class="ui-button ui-widget ui-corner-all" id="clear_directions">Clear Directions</button>
 		<br/>
 		<br/>
-		<div id="step-size-slider" style="margin-left:50px;margin-right:50px"></div>
-		<p id="step-size">Step value: ??</p>
+		<div>
+		    <span id="step-size">Step value: ??</span>
+		    <span id="step-size-slider" style="margin-right:50px;width:400px;float:right"></span>
+		</div>
+		<br/>
+		<div>
+		    <span id="similarity">Similarity value: ??</span>
+		    <span id="similarity-slider" style="margin-right:50px;width:400px;float:right"></span>
+		</div>
+		<br/>
+		<fieldset>
+		    <legend>Click action: </legend>
+		    <label for="add_image">Add frame(s)</label>
+		    <input type="radio" name="click_action" value="add_image" id="add_image">
+		    <label for="get_similar">Get similar frames</label>
+		    <input type="radio" name="click_action" value="get_similar" id="get_similar">
+		</fieldset>
 		<p>Current video description
 		    <button class="ui-button ui-widget ui-corner-all" id="load">Load</button>
 		    <button class="ui-button ui-widget ui-corner-all" id="load_relative">Load Relative</button>
