@@ -207,22 +207,47 @@ def delete_image():
         update_direction_imgs(state, step_size)
     return get_response(state)
 
+def parse_video_description(description, state):
+    from numpy import array
+    obj = eval(description) # Shut up, this doesn't need to be secure.
+    for x in obj:
+        if x.shape != (state.dcgan.z_dim,):
+            raise Exception("z-dim doesn't match")
+        if np.max(x) > 1.0 or np.min(x) < -1.0:
+            raise Exception("value(s) out of range")
+    return obj
+
 @route('/load_video_description')
 def load_video_description():
     global state
     description = request.params.get('description');
     step_size = request.params.get('step_size')
     try:
-        from numpy import array
-        obj = eval(description) # Shut up, this doesn't need to be secure.
-        for x in obj:
-            if x.shape != (state.dcgan.z_dim,):
-                raise Exception("z-dim doesn't match")
-            if np.max(x) > 1.0 or np.min(x) < -1.0:
-                raise Exception("value(s) out of range")
-        state.video_zs = obj
+        state.video_zs = parse_video_description(description, state)
         imgs = run_inference(state.sess, state.dcgan, state.video_zs)
         state.video_paths = [write_img(im, state) for im in imgs]
+        update_direction_imgs(state, step_size)
+        return get_response(state)
+    except:
+        e = sys.exc_info()[1]
+        return get_error("Problem parsing video description: %s" % e)
+
+@route('/load_relative_video_description')
+def load_relative_video_description():
+    global state
+    if not state.video_zs:
+        return error("Need at least one existing video frame to load relative")
+    description = request.params.get('description');
+    step_size = request.params.get('step_size')
+    try:
+        abs_d = parse_video_description(description, state)
+        rel_d = [np.subtract(x, abs_d[0]) for x in abs_d]
+        last = state.video_zs[-1]
+        new = [np.add(x, last) for x in rel_d[1:]]
+        new = np.maximum(-1.0, np.minimum(1.0, new))
+        state.video_zs.extend(new)
+        imgs = run_inference(state.sess, state.dcgan, new)
+        state.video_paths.extend([write_img(im, state) for im in imgs])
         update_direction_imgs(state, step_size)
         return get_response(state)
     except:

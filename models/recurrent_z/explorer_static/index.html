@@ -183,6 +183,12 @@
 		     "step_size": get_slider_value(),
 		 });
 	     });
+	     $("#load_relative").click(function() {
+		 request("load_relative_video_description", {
+		     "description": $("#video-txt").val(),
+		     "step_size": get_slider_value(),
+		 });
+	     });
 
 	     $("#step-size-slider").slider({
 		 min: 0,
