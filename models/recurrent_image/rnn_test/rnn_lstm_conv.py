@@ -13,15 +13,17 @@ output_channels = 8
 image_dimension = 64
 image_size = image_dimension * image_dimension
 
-filter_dimension = image_dimension / 4
-stride = 4
+filter_dimension = [8, 4]
+stride = [2,4]
 
 state_channels = 2
-state_dimension = int(image_dimension / stride)
+state_dimension = int(image_dimension / stride[0] / stride [1])
 state_size = state_channels * state_dimension * state_dimension
 # state_size = image_size * output_channels
 
-output_shape = [batch_size, image_dimension, image_dimension, output_channels * num_classes]
+output_shape = [[batch_size, state_dimension * stride[0], state_dimension * stride[0], output_channels * num_classes],
+                [batch_size, image_dimension, image_dimension, output_channels * num_classes]]
+
 echo_step = 3
 
 num_batches = total_series_length//batch_size//truncated_backprop_length
@@ -75,12 +77,9 @@ cell_state = tf.placeholder(tf.float32, [batch_size, state_size])
 hidden_state = tf.placeholder(tf.float32, [batch_size, state_size])
 init_state = tf.nn.rnn_cell.LSTMStateTuple(cell_state, hidden_state)
 
-# Weights and bias for fully connected implementation
-# W2 = tf.Variable(np.random.rand(state_size, image_size * output_channels),dtype=tf.float32)
-# b2 = tf.Variable(np.zeros((1, image_size * output_channels)), dtype=tf.float32)
-
-# Filter for convolution implementation
-f2 = tf.Variable(np.random.rand(filter_dimension, filter_dimension, output_channels * num_classes, state_channels),dtype=tf.float32)
+# Filter for deconvolutions
+f1 = tf.Variable(np.random.rand(filter_dimension[0], filter_dimension[0], output_channels * num_classes, state_channels),dtype=tf.float32)
+f2 = tf.Variable(np.random.rand(filter_dimension[1], filter_dimension[1], output_channels * num_classes, output_channels * num_classes),dtype=tf.float32)
 
 # Unpack columns
 inputs_series = tf.unpack(batchX_placeholder, axis=1)
@@ -98,16 +97,23 @@ states_series, current_state = tf.nn.rnn(cell, inputs_series, init_state)
 # print (states_series[0].get_shape())
 # print ("")
 
-# logits_series = [tf.reshape(tf.matmul(state, W2) + b2, [batch_size, image_size, num_classes]) for state in states_series] #Broadcasted addition
-# logits_series = [tf.reshape(state, [batch_size, image_size, num_classes]) for state in states_series]
-logits_series = [tf.reshape(tf.nn.conv2d_transpose(
-                                tf.reshape(state, [batch_size, state_dimension, state_dimension, state_channels]),
-                                f2, 
-                                output_shape, 
-                                [1,stride,stride,1],
-                                "SAME"
-                                ), 
-                            [batch_size, image_size * output_channels, num_classes]) for state in states_series]
+logits_series = []
+
+for state in states_series:
+    deconv_in = tf.reshape(state, [batch_size, state_dimension, state_dimension, state_channels])
+    deconv_1 = tf.nn.conv2d_transpose(deconv_in, f1, output_shape[0], [1,stride[0],stride[0],1], "SAME")
+    deconv_2 = tf.nn.conv2d_transpose(deconv_1, f2, output_shape[1], [1,stride[1],stride[1],1], "SAME")
+    logits_series.append(tf.reshape(deconv_2, [batch_size, image_size * output_channels, num_classes]))
+
+
+# logits_series = [tf.reshape(tf.nn.conv2d_transpose(
+#                                 tf.reshape(state, [batch_size, state_dimension, state_dimension, state_channels]),
+#                                 f2, 
+#                                 output_shape, 
+#                                 [1,stride,stride,1],
+#                                 "SAME"
+#                                 ), 
+#                             [batch_size, image_size * output_channels, num_classes]) for state in states_series]
 
 print ("Logit Shape:")
 print (logits_series[0].get_shape())
