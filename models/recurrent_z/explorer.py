@@ -148,7 +148,7 @@ def update_direction_imgs(state, step_size):
     for d in xrange(state.args.num_directions):
         for s in xrange(state.args.num_steps):
             zs[d][s] += state.directions[d] * step_size * (s+1)
-    zs = np.maximum(-1.0, np.minimum(1.0, zs))
+    #zs = np.maximum(-1.0, np.minimum(1.0, zs))
     state.direction_zs = zs
     state.add_individually = False
     update_direction_paths(state)
@@ -189,17 +189,22 @@ def update_step_size():
     update_direction_imgs(state, step_size)
     return get_response(state)
 
-@route('/choose_init_face')
-def choose_init_face():
+@route('/random_faces')
+def random_faces():
     global state
-    state.video_zs = []
-    state.video_paths = []
     state.directions = None
     state.direction_zs = np.random.uniform(-1.0, 1.0, size=(state.args.initial_face_rows,
                                                             state.args.initial_face_cols,
                                                             state.dcgan.z_dim))
     state.add_individually = True
     update_direction_paths(state)
+    return get_response(state)
+
+@route('/clear_faces')
+def clear_faces():
+    global state
+    state.video_zs = []
+    state.video_paths = []
     return get_response(state)
 
 @route('/perp_faces')
@@ -227,6 +232,7 @@ def perp_faces():
     norms = np.sqrt(np.sum(np.square(perp), axis=2, keepdims=True))
     perp = np.divide(perp, norms) * similarity
     state.direction_zs = first + perp
+    state.add_individually = True
     #state.direction_zs = np.maximum(-1.0, np.minimum(1.0, state.direction_zs))
     update_direction_paths(state)
     return get_response(state)
@@ -259,8 +265,8 @@ def get_similar():
         norms = np.sqrt(np.sum(np.square(deltas), axis=1, keepdims=True))
         deltas = np.divide(deltas, norms) * similarity
         deltas[0,0,:] = 0.0 # Top left should be the initial faces
-        zs = initial + deltas
-        state.direction_zs = np.maximum(-1.0, np.minimum(1.0, zs))
+        state.direction_zs = initial + deltas
+        #state.direction_zs = np.maximum(-1.0, np.minimum(1.0, state.direction_zs))
         update_direction_paths(state)
         return get_response(state)
     else:
@@ -326,7 +332,7 @@ def load_relative_video_description():
         rel_d = [np.subtract(x, abs_d[0]) for x in abs_d]
         last = state.video_zs[-1]
         new = [np.add(x, last) for x in rel_d[1:]]
-        new = np.maximum(-1.0, np.minimum(1.0, new))
+        #new = np.maximum(-1.0, np.minimum(1.0, new))
         state.video_zs.extend(new)
         imgs = run_inference(state.sess, state.dcgan, new)
         state.video_paths.extend([write_img(im, state) for im in imgs])

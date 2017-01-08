@@ -180,13 +180,16 @@
 		     play_interval = null;
 		 }
 	     });
-	     $("#choose_init_face").click(function() {
-		 request("choose_init_face", {});
+	     $("#random_faces").click(function() {
+		 request("random_faces", {});
 	     });
-	     $("#init_face").click(function() {
-		 request("init_face", {
-		     "step_size": get_step_size(),
+	     $("#perp_faces").click(function() {
+		 request("perp_faces", {
+		     "similarity": get_sim_value() * 10,
 		 });
+	     });
+	     $("#clear_faces").click(function() {
+		 request("clear_faces", {});
 	     });
 	     $("#init_directions").click(function() {
 		 request("init_directions", {
@@ -211,11 +214,6 @@
 	     $("#save").click(function() {
 		 request("save", {
 		     "frame_rate": $("#fps").val(),
-		 });
-	     });
-	     $("#perp_faces").click(function() {
-		 request("perp_faces", {
-		     "similarity": get_sim_value() * 10,
 		 });
 	     });
 
@@ -274,8 +272,9 @@
 	<div style="width: 45%; height: 100%; float: left;">
 	    <!-- TOP LEFT -->
 	    <div style="height:75%;width:100%;overflow:auto">
-		<button class="ui-button ui-widget ui-corner-all" id="choose_init_face">Random Initial Faces</button>
+		<button class="ui-button ui-widget ui-corner-all" id="random_faces">Random Faces</button>
 		<button class="ui-button ui-widget ui-corner-all" id="perp_faces">Perpendicular Faces</button>
+		<button class="ui-button ui-widget ui-corner-all" id="clear_faces">Clear Timeline</button>
 		<button class="ui-button ui-widget ui-corner-all" id="init_directions">Random Directions</button>
 		<button class="ui-button ui-widget ui-corner-all" id="clear_directions">Clear Directions</button>
 		<br/>
