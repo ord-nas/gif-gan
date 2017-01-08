@@ -202,6 +202,35 @@ def choose_init_face():
     update_direction_paths(state)
     return get_response(state)
 
+@route('/perp_faces')
+def perp_faces():
+    global state
+    similarity = float(request.params.get('similarity'))
+    if len(state.video_zs) < 2:
+        return get_error("Need at least two faces in timeline to get perpendicular faces")
+    first = state.video_zs[0]
+    last = state.video_zs[-1]
+    delta = last - first
+    max_index = np.argmax(np.abs(delta))
+    delta_without_max = np.concatenate((delta[:max_index], delta[max_index+1:]))
+    max_val = delta[max_index]
+    perp_seeds = np.random.uniform(-1.0, 1.0, size=(state.args.initial_face_rows,
+                                                    state.args.initial_face_cols,
+                                                    state.dcgan.z_dim-1))
+    inferred_value = -1.0 / max_val * np.sum(np.multiply(perp_seeds,
+                                                         delta_without_max),
+                                             axis=2, keepdims=True)
+    perp = np.concatenate((perp_seeds[:,:,:max_index],
+                           inferred_value,
+                           perp_seeds[:,:,max_index:]),
+                        axis=2)
+    norms = np.sqrt(np.sum(np.square(perp), axis=2, keepdims=True))
+    perp = np.divide(perp, norms) * similarity
+    state.direction_zs = first + perp
+    #state.direction_zs = np.maximum(-1.0, np.minimum(1.0, state.direction_zs))
+    update_direction_paths(state)
+    return get_response(state)
+
 @route('/add_image')
 def add_image():
     global state
@@ -266,8 +295,8 @@ def parse_video_description(description, state):
     for x in obj:
         if x.shape != (state.dcgan.z_dim,):
             raise Exception("z-dim doesn't match")
-        if np.max(x) > 1.0 or np.min(x) < -1.0:
-            raise Exception("value(s) out of range")
+        # if np.max(x) > 1.0 or np.min(x) < -1.0:
+        #     raise Exception("value(s) out of range")
     return obj
 
 @route('/load_video_description')

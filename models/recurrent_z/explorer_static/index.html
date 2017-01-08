@@ -213,6 +213,11 @@
 		     "frame_rate": $("#fps").val(),
 		 });
 	     });
+	     $("#perp_faces").click(function() {
+		 request("perp_faces", {
+		     "similarity": get_sim_value() * 10,
+		 });
+	     });
 
 	     $("#step-size-slider").slider({
 		 min: 0,
@@ -270,6 +275,7 @@
 	    <!-- TOP LEFT -->
 	    <div style="height:75%;width:100%;overflow:auto">
 		<button class="ui-button ui-widget ui-corner-all" id="choose_init_face">Random Initial Faces</button>
+		<button class="ui-button ui-widget ui-corner-all" id="perp_faces">Perpendicular Faces</button>
 		<button class="ui-button ui-widget ui-corner-all" id="init_directions">Random Directions</button>
 		<button class="ui-button ui-widget ui-corner-all" id="clear_directions">Clear Directions</button>
 		<br/>
