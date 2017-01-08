@@ -13,6 +13,7 @@ parser = argparse.ArgumentParser()
 # Input/output params
 parser.add_argument("--checkpoint_directory", required=True, help="Directory to load checkpoint files from")
 parser.add_argument("--tmp_directory", default="/tmp/DCGAN_server_dir", help="Directory to dump temp files")
+parser.add_argument("--save_directory", required=True, help="Directory to place save files")
 parser.add_argument("--batch_size", type=int, default=64, help="Batch size to use internally to generate images")
 parser.add_argument("--num_directions", type=int, default=16, help="How many different z-space directions to show")
 parser.add_argument("--num_steps", type=int, default=4, help="How many steps to take in each direction")
@@ -35,16 +36,36 @@ class ServerState(object):
         self.direction_paths = [] # list of list of strings, direction_paths[direction][step]
         self.add_individually = False
         self.counter = 0
+        self.vid_counter = 0
         self.response = None
+        self.video_filename = "None"
 
+# Returns the *client-side* path to the image
 def write_img(im, state):
     im = inverse_transform(im)
     im = np.around(im * 255).astype('uint8')
     im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
     filename = "img_%d.png" % state.counter
-    cv2.imwrite(os.path.join(state.args.tmp_directory, filename), im)
     state.counter += 1
+    cv2.imwrite(os.path.join(state.args.tmp_directory, filename), im)
     return os.path.join("media/", filename)
+
+# Returns the *actual* path to the video
+def write_video(frame_rate, state):
+    filename = "vid_%d.mp4" % state.vid_counter
+    filepath = os.path.join(state.args.save_directory, filename)
+    state.vid_counter += 1
+    frame_size = (state.args.image_size*2, state.args.image_size*2)
+    writer = cv2.VideoWriter(filepath, 0x20, frame_rate, frame_size)
+    imgs = run_inference(state.sess, state.dcgan, state.video_zs)
+    for im in imgs:
+        im = inverse_transform(im)
+        im = np.around(im * 255).astype('uint8')
+        im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+        im = cv2.resize(im, frame_size, interpolation=cv2.INTER_LINEAR)
+        writer.write(im)
+    writer.release()
+    return filepath
 
 # Format of response:
 # response: either "success" or "error"
@@ -300,6 +321,7 @@ def get_response(state):
             "video_paths": state.video_paths,
             "directions": repr(state.directions),
             "direction_paths": state.direction_paths,
+            "video_save_path": state.video_filename,
         }
     }
 
@@ -310,6 +332,16 @@ def index():
 @route('/blank.jpg')
 def index():
     return static_file('blank.jpg', root='explorer_static')
+
+@route('/save')
+def save():
+    global state
+    try:
+        frame_rate = int(request.params.get('frame_rate'))
+    except ValueError:
+        return get_error("Couldn't parse FPS")
+    state.video_filename = write_video(frame_rate, state)
+    return get_response(state)
 
 def load_dcgan(sess, args):
     dcgan = DCGAN(sess,
@@ -353,9 +385,11 @@ def main():
     # Configure numpy to print full arrays
     np.set_printoptions(threshold=np.nan)
 
-    # Make tmp directory
+    # Make directories if they don't exist
     if not os.path.exists(args.tmp_directory):
         os.makedirs(args.tmp_directory)
+    if not os.path.exists(args.save_directory):
+        os.makedirs(args.save_directory)
 
     # Define route for tmp directory
     @route('/media/<filename>')

@@ -122,6 +122,9 @@
 		 }
 		 row_div.appendTo(selector);
 	     }
+
+	     // Update saved filename
+	     $("#save_name").text("Saved video: " + msg["video_save_path"]);
 	 }
 
 	 function get_step_size(input_val) {
@@ -203,6 +206,11 @@
 		 request("load_relative_video_description", {
 		     "description": $("#video-txt").val(),
 		     "step_size": get_step_size(),
+		 });
+	     });
+	     $("#save").click(function() {
+		 request("save", {
+		     "frame_rate": $("#fps").val(),
 		 });
 	     });
 
@@ -296,7 +304,11 @@
 		<br/>
 		<button class="ui-button ui-widget ui-corner-all" id="play">Play</button>
 		<button class="ui-button ui-widget ui-corner-all" id="stop">Stop</button>
+		<button class="ui-button ui-widget ui-corner-all" id="save">Save</button>
 		<label>FPS: <input type="text" id="fps"></label>
+		<br/>
+		<br/>
+		<span id="save_name">Saved video: None</span>
 	    </div>
 
 	    <!-- BOTTOM LEFT -->
