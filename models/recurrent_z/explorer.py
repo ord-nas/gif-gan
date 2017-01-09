@@ -365,7 +365,7 @@ def index():
     return static_file('index.html', root='explorer_static')
 
 @route('/blank.jpg')
-def index():
+def blank():
     return static_file('blank.jpg', root='explorer_static')
 
 @route('/save')
