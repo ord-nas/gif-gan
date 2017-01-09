@@ -131,10 +131,20 @@ def test(n):
     end = time.time()
     return template("<p>Got {{x}} images in {{t}} seconds!</p>", x=len(imgs), t=end-start)
 
-def update_direction_paths(state):
+def update_direction_paths(state, sort=False):
     (rows, cols, z_dim) = state.direction_zs.shape
     zs = np.reshape(state.direction_zs, [rows * cols, z_dim])
-    imgs = run_inference(state.sess, state.dcgan, zs)
+    imgs, scores1, scores2 = run_inference(state.sess, state.dcgan, zs, run_discriminator=True)
+    imgs = np.array(imgs)
+    print "Generated score pairs, pure batch (first column inference mode, second column training mode)"
+    print np.stack((np.concatenate(scores1), np.concatenate(scores2))).T
+    scores = np.concatenate(scores2)
+    if sort:
+        perm = np.argsort(scores)
+        perm[:] = perm[::-1]
+        imgs = imgs[perm,:,:,:]
+        #print "SCORES", scores.shape
+        #print scores[perm]
     paths = np.array([write_img(im, state) for im in imgs])
     state.direction_paths = np.reshape(paths, [rows, cols]).tolist()
 
@@ -197,7 +207,7 @@ def random_faces():
                                                             state.args.initial_face_cols,
                                                             state.dcgan.z_dim))
     state.add_individually = True
-    update_direction_paths(state)
+    update_direction_paths(state, sort=True)
     return get_response(state)
 
 @route('/clear_faces')
@@ -398,19 +408,78 @@ def load_dcgan(sess, args):
     dcgan.saver.restore(sess, os.path.join(args.checkpoint_directory, ckpt_name))
     return dcgan
 
-def run_inference(sess, dcgan, inputs):
+def run_inference(sess, dcgan, inputs, run_discriminator=False):
     imgs = []
+    scores1 = []
+    scores2 = []
     for i in xrange(0, len(inputs), dcgan.batch_size):
         z_array = inputs[i:i+dcgan.batch_size]
         z = np.stack(z_array)
         z.resize(dcgan.batch_size, dcgan.z_dim)
-        samples = sess.run(dcgan.sampler, feed_dict={
+        tensors = [dcgan.sampler]
+        if run_discriminator:
+            tensors.append(dcgan.D_inf_)
+        results = sess.run(tensors, feed_dict={
             dcgan.z: z,
         })
+        samples = results[0]
         imgs.extend(samples[:len(z_array)])
-    return imgs
+        if run_discriminator:
+            sample_scores = results[1]
+            scores1.extend(sample_scores[:len(z_array)])
+    if run_discriminator:
+        # Evaluate real images also
+        from glob import glob
+        from utils import get_image
+        data = glob("face_examples/*.png")
+        sample = [get_image(sample_file, 64, is_crop=False, resize_w=64, is_grayscale=False) for sample_file in data]
+        sample_images = np.array(sample).astype(np.float32)
+        mixed_scores_1a = sess.run(dcgan.D_inf, feed_dict={
+            dcgan.images: np.concatenate((sample_images[:32],
+                                          samples[:32])),
+        })
+        mixed_scores_1b = sess.run(dcgan.D_inf, feed_dict={
+            dcgan.images: np.concatenate((sample_images[32:],
+                                          samples[32:])),
+        })
+        real_scores_1 = sess.run(dcgan.D_inf, feed_dict={
+            dcgan.images: sample_images,
+        })
+        mixed_scores_2a = sess.run(dcgan.D, feed_dict={
+            dcgan.images: np.concatenate((sample_images[:32],
+                                          samples[:32])),
+        })
+        mixed_scores_2b = sess.run(dcgan.D, feed_dict={
+            dcgan.images: np.concatenate((sample_images[32:],
+                                          samples[32:])),
+        })
+        mixed_scores_1_real = np.concatenate((mixed_scores_1a[:32], mixed_scores_1b[:32]))
+        mixed_scores_1_generated = np.concatenate((mixed_scores_1a[32:], mixed_scores_1b[32:]))
+        mixed_scores_2_real = np.concatenate((mixed_scores_2a[:32], mixed_scores_2b[:32]))
+        mixed_scores_2_generated = np.concatenate((mixed_scores_2a[32:], mixed_scores_2b[32:]))
+        print "Real score pairs, mixed batch (first column inference mode, second column training mode)"
+        print np.stack((mixed_scores_1_real[:,0], mixed_scores_2_real[:,0])).T
+        print "Generated score pairs, mixed batch (first column inference mode, second column training mode)"
+        print np.stack((mixed_scores_1_generated[:,0], mixed_scores_2_generated[:,0])).T
+        real_scores_2 = sess.run(dcgan.D, feed_dict={
+            dcgan.images: sample_images,
+        })
+        print "Real score pairs, pure batch (first column inference mode, second column training mode)"
+        print np.stack((real_scores_1[:,0], real_scores_2[:,0])).T
+        for i in xrange(0, len(inputs), dcgan.batch_size):
+            z_array = inputs[i:i+dcgan.batch_size]
+            z = np.stack(z_array)
+            z.resize(dcgan.batch_size, dcgan.z_dim)
+            sample_scores2 = sess.run(dcgan.D_, feed_dict={
+                dcgan.z: z,
+            })
+            scores2.extend(sample_scores2[:len(z_array)])
+        return imgs, scores1, scores2
+    else:
+        return imgs
 
 def main():
+    np.random.seed(0)
     global state
     args = parser.parse_args()
     sess = tf.Session()

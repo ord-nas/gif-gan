@@ -100,11 +100,12 @@ class DCGAN(object):
             self.D_, self.D_logits_ = self.discriminator(self.G, self.y, reuse=True)
         else:
             self.G = self.generator(self.z)
-            self.D, self.D_logits, self.D_activations = self.discriminator(self.images)
+            self.D, self.D_logits, self.D_activations = self.discriminator(self.images, reuse=False)
+            self.D_inf, self.D_logits_inf, self.D_activations_inf = self.discriminator(self.images, reuse=True, train=False)
 
             self.sampler = self.sampler(self.sample_z)
             self.D_, self.D_logits_, self.D_activations_ = self.discriminator(self.G, reuse=True)
-        
+            self.D_inf_, self.D_logits_inf_, self.D_activations_inf_ = self.discriminator(self.sampler, reuse=True, train=False)
 
         self.d_sum = tf.histogram_summary("d", self.D)
         self.d__sum = tf.histogram_summary("d_", self.D_)
@@ -255,15 +256,15 @@ class DCGAN(object):
                 if np.mod(counter, 500) == 2:
                     self.save(config.checkpoint_dir, counter)
 
-    def discriminator(self, image, y=None, reuse=False):
+    def discriminator(self, image, y=None, reuse=False, train=True):
         if reuse:
             tf.get_variable_scope().reuse_variables()
 
         if not self.y_dim:
             h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
-            h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, name='d_h1_conv')))
-            h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, name='d_h2_conv')))
-            h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, name='d_h3_conv')))
+            h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, name='d_h1_conv'), train=train))
+            h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, name='d_h2_conv'), train=train))
+            h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, name='d_h3_conv'), train=train))
             h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h3_lin')
 
             return tf.nn.sigmoid(h4), h4, h3
