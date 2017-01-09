@@ -3,20 +3,22 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 
+randomize_pixels = True
+
 num_epochs = 100
-batch_size = 1
-total_series_length = 5000
-truncated_backprop_length = 5
+batch_size = 5
+total_series_length = 150000
+truncated_backprop_length = 15
 num_classes = 2
 
-output_channels = 8
-image_dimension = 64
+output_channels = 1
+image_dimension = 8
 image_size = image_dimension * image_dimension
 
-filter_dimension = [8, 4]
-stride = [2,4]
+filter_dimension = [4, 2]
+stride = [1,1]
 
-state_channels = 2
+state_channels = 4
 state_dimension = int(image_dimension / stride[0] / stride [1])
 state_size = state_channels * state_dimension * state_dimension
 # state_size = image_size * output_channels
@@ -29,13 +31,16 @@ echo_step = 3
 num_batches = total_series_length//batch_size//truncated_backprop_length
 
 def generateData():
-    x = np.array(np.random.choice(2, total_series_length * image_size * output_channels, p=[0.5, 0.5]))
-    y = np.roll(x, echo_step * image_size * output_channels)
-    y[0:echo_step * image_size * output_channels] = 0
-    # y = np.array(np.random.choice(2, total_series_length * image_size, p=[0.5, 0.5]))
-
-    # x = np.repeat(x, image_size, axis = 0)
-    # y = np.repeat(y, image_size, axis = 0)
+    if randomize_pixels:
+        x = np.array(np.random.choice(2, total_series_length * image_size * output_channels, p=[0.5, 0.5]))
+        y = np.roll(x, echo_step * image_size * output_channels)
+        y[0:echo_step * image_size * output_channels] = 0
+    else:
+        x = np.array(np.random.choice(2, total_series_length, p=[0.5, 0.5]))
+        y = np.roll(x, echo_step)
+        y[0:echo_step] = 0
+        x = np.repeat(x, image_size * output_channels, axis = 0)
+        y = np.repeat(y, image_size * output_channels, axis = 0)
 
     x = x.reshape((batch_size, -1, image_size * output_channels))  # The first index changing slowest, subseries as rows
     y = y.reshape((batch_size, -1, image_size * output_channels))
@@ -100,20 +105,12 @@ states_series, current_state = tf.nn.rnn(cell, inputs_series, init_state)
 logits_series = []
 
 for state in states_series:
-    deconv_in = tf.reshape(state, [batch_size, state_dimension, state_dimension, state_channels])
-    deconv_1 = tf.nn.conv2d_transpose(deconv_in, f1, output_shape[0], [1,stride[0],stride[0],1], "SAME")
-    deconv_2 = tf.nn.conv2d_transpose(deconv_1, f2, output_shape[1], [1,stride[1],stride[1],1], "SAME")
+    input_layer = tf.reshape(state, [batch_size, state_dimension, state_dimension, state_channels])
+    relu_1 = tf.nn.relu(input_layer)
+    deconv_1 = tf.nn.conv2d_transpose(relu_1, f1, output_shape[0], [1,stride[0],stride[0],1], "SAME")
+    relu_2 = tf.nn.relu(deconv_1)
+    deconv_2 = tf.nn.conv2d_transpose(relu_2, f2, output_shape[1], [1,stride[1],stride[1],1], "SAME")
     logits_series.append(tf.reshape(deconv_2, [batch_size, image_size * output_channels, num_classes]))
-
-
-# logits_series = [tf.reshape(tf.nn.conv2d_transpose(
-#                                 tf.reshape(state, [batch_size, state_dimension, state_dimension, state_channels]),
-#                                 f2, 
-#                                 output_shape, 
-#                                 [1,stride,stride,1],
-#                                 "SAME"
-#                                 ), 
-#                             [batch_size, image_size * output_channels, num_classes]) for state in states_series]
 
 print ("Logit Shape:")
 print (logits_series[0].get_shape())
@@ -167,7 +164,7 @@ with tf.Session() as sess:
 
             _current_cell_state, _current_hidden_state = _current_state
 
-            if epoch_idx > 0:
+            if not (epoch_idx == 0 and batch_idx < 100):
                 loss_list.append(_total_loss)
 
             if batch_idx%100 == 0:
