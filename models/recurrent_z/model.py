@@ -176,7 +176,6 @@ class DCGAN(object):
             if config.dataset == 'mnist':
                 batch_idxs = min(len(data_X), config.train_size) // config.batch_size
             else:            
-                data = glob(os.path.join(self.data_dir, config.dataset, self.image_glob))
                 batch_idxs = min(len(data), config.train_size) // config.batch_size
 
             for idx in xrange(0, batch_idxs):
