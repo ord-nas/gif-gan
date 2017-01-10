@@ -1,3 +1,17 @@
+"""
+Little webserver app for playing around with image DCGAN latent z space.
+
+Run like this:
+
+(in this directory)
+
+python explorer.py --checkpoint_directory <path/to/checkpoint/directory> --save_directory <path/to/directory/to/dump/saved/videos> --batch_size 1 --port 8080
+
+For example:
+
+python explorer.py --checkpoint_directory DCGAN_checkpoints/r0/face_stills_v0_64_64_saver_version_1/ --save_directory MY_SAVE_DIR --batch_size 1 --port 8080
+"""
+
 from bottle import route, run, template, static_file, request
 from model import DCGAN
 import argparse
