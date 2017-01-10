@@ -645,19 +645,38 @@ class DCGAN_with_mixed_batch(object):
         if reuse:
             tf.get_variable_scope().reuse_variables()
 
-        image = tf.concat_v2([real_image, generated_image], axis=0)
+        try:
+            concat = tf.concat_v2
+        # Support for previous verisons of TensorFlow
+        except AttributeError:
+            def concat(values, axis, name='concat_v2'):
+                return tf.concat(axis, values, name)
+            
+        print "REAL_IMAGE", real_image.get_shape().as_list()
+        print "GENERATED_IMAGE", generated_image.get_shape().as_list()
+        image = concat([real_image, generated_image], axis=0)
+        print "CONCAT", image.get_shape().as_list()
         h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
+        print "h0", h0.get_shape().as_list()
         h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, name='d_h1_conv'), train=train))
+        print "h1", h1.get_shape().as_list()
         h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, name='d_h2_conv'), train=train))
+        print "h2", h2.get_shape().as_list()
         h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, name='d_h3_conv'), train=train))
+        print "h3", h3.get_shape().as_list()
         h4 = linear(tf.reshape(h3, [2*self.batch_size, -1]), 1, 'd_h3_lin')
+        print "h4", h4.get_shape().as_list()
 
-        return (tf.nn.sigmoid(h4)[:self.batch_size],
-                tf.nn.sigmoid(h4)[self.batch_size:],
-                h4[:self.batch_size],
-                h4[self.batch_size:],
-                h3[:self.batch_size],
-                h3[self.batch_size:])
+        stuff = (tf.nn.sigmoid(h4)[:self.batch_size],
+                 tf.nn.sigmoid(h4)[self.batch_size:],
+                 h4[:self.batch_size],
+                 h4[self.batch_size:],
+                 h3[:self.batch_size],
+                 h3[self.batch_size:])
+        for i in xrange(len(stuff)):
+            print "OUTPUT", i, stuff[i].get_shape().as_list()
+
+        return stuff
 
     def generator(self, z):
         s = self.output_size
