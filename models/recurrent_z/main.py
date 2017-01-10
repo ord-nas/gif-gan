@@ -2,7 +2,7 @@ import os
 import scipy.misc
 import numpy as np
 
-from model import DCGAN
+from model import DCGAN, DCGAN_with_mixed_batch
 from utils import pp, visualize, to_json
 
 import tensorflow as tf
@@ -26,6 +26,7 @@ flags.DEFINE_boolean("is_train", False, "True for training, False for testing [F
 flags.DEFINE_boolean("is_crop", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
 flags.DEFINE_boolean("shuffle", False, "True to shuffle the dataset, False otherwise [False]")
+flags.DEFINE_boolean("mixed_disc_batch", False, "True to feed discriminator a mixed batch of real/generated images [False]")
 FLAGS = flags.FLAGS
 
 def main(_):
@@ -37,14 +38,16 @@ def main(_):
         os.makedirs(FLAGS.sample_dir)
 
     with tf.Session() as sess:
+        DCGAN_class = DCGAN_with_mixed_batch if FLAGS.mixed_disc_batch else DCGAN
+        
         if FLAGS.dataset == 'mnist':
-            dcgan = DCGAN(sess, image_size=FLAGS.image_size, batch_size=FLAGS.batch_size, y_dim=10, output_size=28, c_dim=1,
-                          dataset_name=FLAGS.dataset, is_crop=FLAGS.is_crop, checkpoint_dir=FLAGS.checkpoint_dir, sample_dir=FLAGS.sample_dir,
-                          data_dir=FLAGS.data_dir, log_dir=FLAGS.log_dir, image_glob=FLAGS.image_glob, shuffle=FLAGS.shuffle)
+            dcgan = DCGAN_class(sess, image_size=FLAGS.image_size, batch_size=FLAGS.batch_size, y_dim=10, output_size=28, c_dim=1,
+                                dataset_name=FLAGS.dataset, is_crop=FLAGS.is_crop, checkpoint_dir=FLAGS.checkpoint_dir, sample_dir=FLAGS.sample_dir,
+                                data_dir=FLAGS.data_dir, log_dir=FLAGS.log_dir, image_glob=FLAGS.image_glob, shuffle=FLAGS.shuffle)
         else:
-            dcgan = DCGAN(sess, image_size=FLAGS.image_size, batch_size=FLAGS.batch_size, output_size=FLAGS.output_size, c_dim=FLAGS.c_dim,
-                          dataset_name=FLAGS.dataset, is_crop=FLAGS.is_crop, checkpoint_dir=FLAGS.checkpoint_dir, sample_dir=FLAGS.sample_dir,
-                          data_dir=FLAGS.data_dir, log_dir=FLAGS.log_dir, image_glob=FLAGS.image_glob, shuffle=FLAGS.shuffle)
+            dcgan = DCGAN_class(sess, image_size=FLAGS.image_size, batch_size=FLAGS.batch_size, output_size=FLAGS.output_size, c_dim=FLAGS.c_dim,
+                                dataset_name=FLAGS.dataset, is_crop=FLAGS.is_crop, checkpoint_dir=FLAGS.checkpoint_dir, sample_dir=FLAGS.sample_dir,
+                                data_dir=FLAGS.data_dir, log_dir=FLAGS.log_dir, image_glob=FLAGS.image_glob, shuffle=FLAGS.shuffle)
 
         if FLAGS.is_train:
             dcgan.train(FLAGS)
