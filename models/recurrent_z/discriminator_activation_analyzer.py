@@ -13,14 +13,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--video_list", required=True, nargs='+',
                     help="One or more text files containing names of .mp4 files")
 parser.add_argument("--input_directory", required=True, help="Base input directory")
+parser.add_argument("--intra_output", default="intra_video_activation_distances.txt")
+parser.add_argument("--inter_output", default="inter_video_activation_distances.txt")
 parser.add_argument("--random_seed", type=int, default=0)
 parser.add_argument("--samples_per_video", type=int, default=8)
 parser.add_argument("--videos_per_batch", type=int, default=8)
 parser.add_argument("--num_batches", type=int, default=1)
 parser.add_argument("--discriminator_mode", required=True, choices=["train", "inference"])
-parser.add_argument("--verbose", dest="verbose", action="store_true")
-parser.add_argument("--no_verbose", dest="verbose", action="store_false")
-parser.set_defaults(verbose=False)
+parser.add_argument("--verbosity", type=int, default=0)
 parser.add_argument("--save_samples", dest="save_samples", action="store_true")
 parser.add_argument("--no_save_samples", dest="save_samples", action="store_false")
 parser.set_defaults(save_samples=False)
@@ -85,6 +85,8 @@ def main():
     # Actually run the batches
     batch_size = args.samples_per_video * args.videos_per_batch
     n = args.videos_per_batch
+    inter = []
+    intra = []
     for i in xrange(args.num_batches):
         batch_files = files[i*n:(i+1)*n]
         batch_frames = get_frames(batch_files, args)
@@ -95,17 +97,80 @@ def main():
         })
         assert activations.shape[0] == batch_size
         activations = np.reshape(activations, [args.videos_per_batch, args.samples_per_video, -1])
+        samples = np.reshape(batch_frames, [args.videos_per_batch,
+                                            args.samples_per_video,
+                                            args.image_size,
+                                            args.image_size,
+                                            args.c_dim])
 
         if args.save_samples:
-            samples = np.reshape(batch_frames, [args.videos_per_batch,
-                                                args.samples_per_video,
-                                                args.image_size,
-                                                args.image_size,
-                                                args.c_dim])
             for vid in xrange(args.videos_per_batch):
                 save_images(samples[vid], [1, args.samples_per_video],
                             "batch_%d_video_%d.png" % (i, vid))
 
+        # First compute intra_video data
+        intra_batch = []
+        for v in xrange(args.videos_per_batch):
+            intra_video = []
+            vid = samples[v]
+            a = activations[v]
+            for j in xrange(args.samples_per_video):
+                # Skip frames that aren't unique
+                if j > 0 and np.allclose(vid[j], vid[j-1]):
+                    continue
+                for k in xrange(j+1, args.samples_per_video):
+                    # Skip frames that aren't unique
+                    if k > 0 and np.allclose(vid[k], vid[k-1]):
+                        continue
+                    distance = np.sqrt(np.sum(np.square(a[j] - a[k])))
+                    intra_video.append(distance)
+            if args.verbosity >= 2:
+                print "INTRA_VIDEO %s" % batch_files[v]
+                for a in intra_video:
+                    print a
+            intra_batch.extend(intra_video)
+        if args.verbosity >= 1:
+            print "INTRA_BATCH %s" % batch_files
+            for a in intra_batch:
+                print a
+        intra.extend(intra_batch)
+
+        inter_batch = []
+        for v1 in xrange(args.videos_per_batch):
+            vid1 = samples[v1]
+            a1 = activations[v1]
+            for v2 in xrange(v1+1, args.videos_per_batch):
+                vid2 = samples[v2]
+                a2 = activations[v2]
+                inter_video = []
+                for j in xrange(args.samples_per_video):
+                    # Skip frames that aren't unique
+                    if j > 0 and np.allclose(vid1[j], vid1[j-1]):
+                        continue
+                    for k in xrange(args.samples_per_video):
+                        # Skip frames that aren't unique
+                        if k > 0 and np.allclose(vid2[k], vid2[k-1]):
+                            continue
+                        distance = np.sqrt(np.sum(np.square(a1[j] - a2[k])))
+                        inter_video.append(distance)
+                if args.verbosity >= 2:
+                    print "INTER_VIDEO %s & %s" % (batch_files[v1], batch_files[v2])
+                    for a in inter_video:
+                        print a
+                inter_batch.extend(inter_video)
+        if args.verbosity >= 1:
+            print "INTER_BATCH %s" % batch_files
+            for a in inter_batch:
+                print a
+        inter.extend(inter_batch)
+
+    # Final output
+    with open(args.intra_output, 'w') as f:
+        for a in intra:
+            f.write("%f\n" % a)
+    with open(args.inter_output, 'w') as f:
+        for a in inter:
+            f.write("%f\n" % a)
 
 if __name__ == "__main__":
     main()
