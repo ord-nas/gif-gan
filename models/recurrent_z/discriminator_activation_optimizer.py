@@ -85,6 +85,10 @@ def main():
     })
     print "TARGET ACTIVATIONS:", target_activations[0]
 
+    # Save the target to disk
+    save_images(np.array([target]), [1, 1],
+                os.path.join(args.sample_dir, "target.png"))
+
     # Build optimizers for making the images' activations match the target
     activations_tensor = dcgan.D_activations_ if train else dcgan.D_activations_inf_
     print activations_tensor.get_shape().as_list()
