@@ -51,7 +51,7 @@ class Layers(object):
 class VID_DCGAN(object):
     def __init__(self, sess, batch_size, z_input_size, z_output_size, vid_length,
                  input_image_size, output_image_size, c_dim,
-                 sample_rows=8, sample_cols=4):
+                 sample_rows=8, sample_cols=8):
         # Member vars
         self.batch_size = batch_size
         self.z_input_size = z_input_size
@@ -86,8 +86,8 @@ class VID_DCGAN(object):
             self.G, self.G_layers = self.generator(self.z, reuse=False, train=True)
             print "Making sampler..."
             self.G_sampler, self.G_sampler_layers = self.generator(self.z, reuse=True, train=False)
-            self.train = tf.placeholder(tf.bool, [], name='gvideo_train')
-            result.G_out = tf.cond(self.train, lambda: self.G, lambda: self.G_sampler)
+            self.is_training = tf.placeholder(tf.bool, [], name='gvideo_train')
+            self.G_out = tf.cond(self.is_training, lambda: self.G, lambda: self.G_sampler)
 
         # Build the inner image gan
         with tf.variable_scope('image_gan'):
@@ -207,7 +207,7 @@ class VID_DCGAN(object):
                     _, d_loss_value = sess.run([d_optim, self.d_loss], feed_dict={
                         self.img_dcgan.images: batch_images,
                         self.z: batch_z,
-                        self.train: True,
+                        self.is_training: True,
                     })
                     d_losses.append(d_loss_value)
 
@@ -216,7 +216,7 @@ class VID_DCGAN(object):
                 for _ in xrange(config.gen_updates):
                     _, g_loss_value = sess.run([g_optim, self.g_loss], feed_dict={
                         self.z: batch_z,
-                        self.train: True,
+                        self.is_training: True,
                     })
                     g_losses.append(g_loss_value)
 
@@ -240,7 +240,7 @@ class VID_DCGAN(object):
         sz = self.output_image_size
         samples = sess.run([self.img_dcgan.sampler], feed_dict={
             self.z: sample_z,
-            self.train: is_training,
+            self.is_training: is_training,
         })
         videos = np.reshape(samples, [self.sample_rows,
                                       self.sample_cols,
@@ -253,7 +253,7 @@ class VID_DCGAN(object):
         folder = os.path.join(config.video_sample_dir, folder)
         if not os.path.exists(folder):
             # No recursive os.makedirs
-            os.makedir(folder)
+            os.mkdir(folder)
 
         filename = '{}/train_{:02d}_{:04d}.mp4'.format(folder, epoch, idx)
         print "Writing samples to", filename
