@@ -362,30 +362,32 @@ class VID_DCGAN(object):
         # First we wanna just project into a reasonable shape.
         # Squeeze all of the per-frame stuff togther
         print "vid:", vid.get_shape().as_list()
-        vid = tf.reshape(vid, [self.batch_size * self.vid_length, -1])
+        vid = tf.reshape(vid, [self.batch_size, 1, self.vid_length, -1])
+        num_filters = vid.get_shape().as_list()[-1]
         print "vid (reshaped):", vid.get_shape().as_list()
 
-        f = self.z_output_size # No reason for it to be this number other than symmetry
-        f, f2, f4, f8, f16 = [int(f*x) for x in np.logspace(math.log10(1),
-                                                            math.log10(2),
-                                                            5)]
+        # f = self.z_output_size # No reason for it to be this number other than symmetry
+        # f, f2, f4, f8, f16 = [int(f*x) for x in np.logspace(math.log10(1),
+        #                                                     math.log10(2),
+        #                                                     5)]
         k_w = 3
         
-        layers.vid_project, layers.d0_w, layers.d0_b = linear(
-            vid, f, 'dvideo_0', with_w=True)
-        print "vid_project:", layers.vid_project.get_shape().as_list()
+        # layers.vid_project, layers.d0_w, layers.d0_b = linear(
+        #     vid, f, 'dvideo_0', with_w=True)
+        # print "vid_project:", layers.vid_project.get_shape().as_list()
 
-        layers.d0 = tf.reshape(layers.vid_project, [self.batch_size, 1, self.vid_length, -1])
-        layers.dr0 = tf.nn.relu(self.d_bn0(layers.d0))
-        print "dr0:", layers.dr0.get_shape().as_list()
+        # layers.d0 = tf.reshape(layers.vid_project, [self.batch_size, 1, self.vid_length, -1])
+        # layers.dr0 = tf.nn.relu(self.d_bn0(layers.d0))
+        # print "dr0:", layers.dr0.get_shape().as_list()
 
-        layers.dr1 = lrelu(self.d_bn1(conv2d(layers.dr0, f2, k_h=1, k_w=k_w, d_h=1, name='dvideo_h1')))
+        layers.dr0 = vid
+        layers.dr1 = lrelu(conv2d(layers.dr0, 512, k_h=1, k_w=k_w, d_h=1, name='dvideo_h1'))
         print "dr1:", layers.dr1.get_shape().as_list()
-        layers.dr2 = lrelu(self.d_bn2(conv2d(layers.dr1, f4, k_h=1, k_w=k_w, d_h=1, name='dvideo_h2')))
+        layers.dr2 = lrelu(self.d_bn2(conv2d(layers.dr1, 512, k_h=1, k_w=k_w, d_h=1, name='dvideo_h2')))
         print "dr2:", layers.dr2.get_shape().as_list()
-        layers.dr3 = lrelu(self.d_bn3(conv2d(layers.dr2, f8, k_h=1, k_w=k_w, d_h=1, name='dvideo_h3')))
+        layers.dr3 = lrelu(self.d_bn3(conv2d(layers.dr2, 512, k_h=1, k_w=k_w, d_h=1, name='dvideo_h3')))
         print "dr3:", layers.dr3.get_shape().as_list()
-        layers.dr4 = lrelu(self.d_bn4(conv2d(layers.dr3, f16, k_h=1, k_w=k_w, d_h=1, name='dvideo_h4')))
+        layers.dr4 = lrelu(self.d_bn4(conv2d(layers.dr3, 512, k_h=1, k_w=k_w, d_h=1, name='dvideo_h4')))
         print "dr4:", layers.dr4.get_shape().as_list()
         layers.d5 = linear(tf.reshape(layers.dr4, [self.batch_size, -1]), 1, 'dvideo_h5')
         print "d5:", layers.d5.get_shape().as_list()
