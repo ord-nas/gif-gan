@@ -86,6 +86,8 @@ class VID_DCGAN(object):
             self.G, self.G_layers = self.generator(self.z, reuse=False, train=True)
             print "Making sampler..."
             self.G_sampler, self.G_sampler_layers = self.generator(self.z, reuse=True, train=False)
+            self.train = tf.placeholder(tf.bool, [], name='gvideo_train')
+            result.G_out = tf.cond(self.train, lambda: self.G, lambda: self.G_sampler)
 
         # Build the inner image gan
         with tf.variable_scope('image_gan'):
@@ -95,7 +97,7 @@ class VID_DCGAN(object):
                                    dataset_name='', is_crop=False,
                                    checkpoint_dir='', sample_dir='',
                                    data_dir='', log_dir='', image_glob='', shuffle=False,
-                                   z=self.G, sample_z=self.G_sampler)
+                                   z=self.G_out)
             self.image_gan_scope_name = tf.get_variable_scope().name + "/"
 
         # Build discriminator
@@ -103,10 +105,10 @@ class VID_DCGAN(object):
             print "Scope name:", tf.get_variable_scope().name
             print "Making first discriminator..."
             self.d_real_out, self.d_real_out_logits, self.D_real_layers = self.discriminator(
-                self.img_dcgan.D_activations, reuse=False)
+                self.img_dcgan.D_activations_inf, reuse=False)
             print "Making second discriminator..."
             self.d_fake_out, self.d_fake_out_logits, self.D_fake_layers = self.discriminator(
-                self.img_dcgan.D_activations_, reuse=True)
+                self.img_dcgan.D_activations_inf_, reuse=True)
 
         # Define trainable variables
         t_vars = tf.trainable_variables()
@@ -204,7 +206,8 @@ class VID_DCGAN(object):
                 for _ in xrange(config.disc_updates):
                     _, d_loss_value = sess.run([d_optim, self.d_loss], feed_dict={
                         self.img_dcgan.images: batch_images,
-                        self.z: batch_z
+                        self.z: batch_z,
+                        self.train: True,
                     })
                     d_losses.append(d_loss_value)
 
@@ -212,7 +215,8 @@ class VID_DCGAN(object):
                 g_losses = []
                 for _ in xrange(config.gen_updates):
                     _, g_loss_value = sess.run([g_optim, self.g_loss], feed_dict={
-                        self.z: batch_z
+                        self.z: batch_z,
+                        self.train: True,
                     })
                     g_losses.append(g_loss_value)
 
@@ -225,8 +229,8 @@ class VID_DCGAN(object):
                          d_losses, g_losses))
 
                 if counter % 10 == 0:
-                    # TODO: this should be is_training=False eventually
                     self.dump_sample(sample_z, sess, config, epoch, i, is_training=True)
+                    self.dump_sample(sample_z, sess, config, epoch, i, is_training=False)
                     saver.save(sess,
                                os.path.join(config.video_checkpoint_dir,
                                             "VID_DCGAN.model"),
@@ -234,9 +238,10 @@ class VID_DCGAN(object):
 
     def dump_sample(self, sample_z, sess, config, epoch, idx, is_training=False):
         sz = self.output_image_size
-        samples = sess.run([self.img_dcgan.sampler if not is_training else self.img_dcgan.G],
-            feed_dict={self.z: sample_z}
-        )
+        samples = sess.run([self.img_dcgan.sampler], feed_dict={
+            self.z: sample_z,
+            self.train: is_training,
+        })
         videos = np.reshape(samples, [self.sample_rows,
                                       self.sample_cols,
                                       self.vid_length,
@@ -244,7 +249,13 @@ class VID_DCGAN(object):
                                       sz,
                                       self.c_dim])
         
-        filename = '{}/train_{:02d}_{:04d}.mp4'.format(config.video_sample_dir, epoch, idx)
+        folder = "train" if is_training else "inference"
+        folder = os.path.join(config.video_sample_dir, folder)
+        if not os.path.exists(folder):
+            # No recursive os.makedirs
+            os.makedir(folder)
+
+        filename = '{}/train_{:02d}_{:04d}.mp4'.format(folder, epoch, idx)
         print "Writing samples to", filename
         w = cv2.VideoWriter(filename,
                             0x20,
