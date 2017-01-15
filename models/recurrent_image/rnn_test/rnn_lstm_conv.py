@@ -10,16 +10,12 @@ import cv2
 input_path = "/media/charles/850EVO/ubuntu_documents/ece496/gif-gan/data_collection/data/processed/"
 saved_sample_path = "io_tests/test_output"
 
-use_real_images = True
 video_length = 16
-randomize_pixels = True
 enable_relu = True
 enable_bn = True
 
 num_epochs = 1000
-batch_size = 512
-total_series_length = 150000
-truncated_backprop_length = video_length
+batch_size = 64
 num_classes = 2
 
 output_channels = 3
@@ -29,37 +25,15 @@ image_size = image_dimension * image_dimension
 filter_dimension = [5, 5, 5, 5]
 stride = [2, 2, 2, 2]
 
-state_channels = 16
-state_dimension = int(image_dimension / (stride[0] * stride[1] * stride[2] * stride[3]))
+state_channels = 4
+state_dimension = int(image_dimension / 16)
 state_size = state_channels * state_dimension * state_dimension
 # state_size = image_size * output_channels
 
-output_shape = [[batch_size, state_dimension * stride[0], state_dimension * stride[0], 16],
+output_shape = [[batch_size, state_dimension * stride[0], state_dimension * stride[0], 8],
                 [batch_size, state_dimension * stride[0] * stride[1], state_dimension * stride[0]* stride[1], 8],
                 [batch_size, state_dimension * stride[0] * stride[1] * stride[2], state_dimension * stride[0]* stride[1] * stride[2], 4],
                 [batch_size, image_dimension, image_dimension, output_channels]]
-
-echo_step = 3
-
-def generateData():
-    if randomize_pixels:
-        # x = np.array(np.random.choice(2, total_series_length * image_size * output_channels, p=[0.5, 0.5]))
-        x = np.array(np.random.uniform(0, 1, (total_series_length * image_size * output_channels)))
-        y = np.roll(x, echo_step * image_size * output_channels)
-        y[0:echo_step * image_size * output_channels] = 0
-        # y = np.array(np.random.uniform(0, 256, (total_series_length * image_size * output_channels)))
-    else:
-        # x = np.array(np.random.choice(2, total_series_length, p=[0.5, 0.5]))
-        x = np.array(np.random.uniform(0, 1, (total_series_length)))
-        y = np.roll(x, echo_step)
-        y[0:echo_step] = 0
-        x = np.repeat(x, image_size * output_channels, axis = 0)
-        y = np.repeat(y, image_size * output_channels, axis = 0)
-
-    x = x.reshape((batch_size, -1, image_size * output_channels))  # The first index changing slowest, subseries as rows
-    y = y.reshape((batch_size, -1, image_size * output_channels))
-
-    return (x,y)
 
 def load_batch():
     global samples_path_list
@@ -86,7 +60,7 @@ def load_batch():
     # return (x[:,:-1,:],x[:,1:,:])
     return x
 
-def save_sample(sample, epoch_idx):
+def save_sample(sample, epoch_idx, batchX):
     for im_num in range(10):
         for frame_num in range(video_length):
             im = (np.array(sample)[frame_num][im_num].reshape((image_dimension, image_dimension, output_channels)) * 256).astype(int)
@@ -127,8 +101,8 @@ for state in states_series:
     input_layer = tf.reshape(state, [batch_size, state_dimension, state_dimension, state_channels])
     
     if enable_bn:
-        mean_1, variance_1 = tf.nn.moments(input_layer, axes = [0])
-        bn_1 = tf.nn.batch_normalization(input_layer, mean_1, variance_1, None, None, 1e-8)
+        mean_1, variance_1 = tf.nn.moments(input_layer, axes = [0, 1, 2])
+        bn_1 = tf.nn.batch_normalization(input_layer, mean_1, variance_1, None, None, 1e-3)
     else:
         bn_1 = input_layer
     if enable_relu:
@@ -138,8 +112,8 @@ for state in states_series:
     deconv_1 = tf.nn.conv2d_transpose(relu_1, f1, output_shape[0], [1,stride[0],stride[0],1], "SAME")
 
     if enable_bn:
-        mean_2, variance_2 = tf.nn.moments(deconv_1, axes = [0])
-        bn_2 = tf.nn.batch_normalization(deconv_1, mean_2, variance_2, None, None, 1e-8)
+        mean_2, variance_2 = tf.nn.moments(deconv_1, axes = [0, 1, 2])
+        bn_2 = tf.nn.batch_normalization(deconv_1, mean_2, variance_2, None, None, 1e-3)
     else:
         bn_2 = deconv_1
     if enable_relu:
@@ -149,8 +123,8 @@ for state in states_series:
     deconv_2 = tf.nn.conv2d_transpose(relu_2, f2, output_shape[1], [1,stride[1],stride[1],1], "SAME")
 
     if enable_bn:
-        mean_3, variance_3 = tf.nn.moments(deconv_2, axes = [0])
-        bn_3 = tf.nn.batch_normalization(deconv_2, mean_3, variance_3, None, None, 1e-8)
+        mean_3, variance_3 = tf.nn.moments(deconv_2, axes = [0, 1, 2])
+        bn_3 = tf.nn.batch_normalization(deconv_2, mean_3, variance_3, None, None, 1e-3)
     else:
         bn_3 = deconv_2
     if enable_relu:
@@ -160,8 +134,8 @@ for state in states_series:
     deconv_3 = tf.nn.conv2d_transpose(relu_3, f3, output_shape[2], [1,stride[2],stride[2],1], "SAME")
 
     if enable_bn:
-        mean_4, variance_4 = tf.nn.moments(deconv_3, axes = [0])
-        bn_4 = tf.nn.batch_normalization(deconv_3, mean_4, variance_4, None, None, 1e-8)
+        mean_4, variance_4 = tf.nn.moments(deconv_3, axes = [0, 1, 2])
+        bn_4 = tf.nn.batch_normalization(deconv_3, mean_4, variance_4, None, None, 1e-3)
     else:
         bn_4 = deconv_3
     if enable_relu:
@@ -171,11 +145,13 @@ for state in states_series:
     deconv_4 = tf.nn.conv2d_transpose(relu_4, f4, output_shape[3], [1,stride[3],stride[3],1], "SAME")
 
     logits_series.append(tf.reshape((tf.tanh(deconv_4) + 1) / 2, [batch_size, image_size * output_channels]))
+    # logits_series.append(tf.reshape(tf.sigmoid(deconv_4), [batch_size, image_size * output_channels]))
 
 # losses = [tf.nn.sigmoid_cross_entropy_with_logits(logits, labels) for logits, labels in zip(logits_series,labels_series)]
 losses = [tf.nn.l2_loss(logits - labels) for logits, labels in zip(logits_series,labels_series)]
 total_loss = tf.reduce_mean(losses) / (batch_size * image_size * output_channels)
 
+# train_step = tf.train.GradientDescentOptimizer(1).minimize(total_loss)
 # train_step = tf.train.AdagradOptimizer(0.3).minimize(total_loss)
 # train_step = tf.train.AdamOptimizer(0.0003).minimize(total_loss)
 train_step = tf.train.AdadeltaOptimizer().minimize(total_loss)
@@ -188,23 +164,20 @@ with tf.Session() as sess:
     loss_list = []
 
     # data preparation
-    if use_real_images:
-        samples_path_list = []
-        batch_list = []
+    samples_path_list = []
+    batch_list = []
 
-        for i in range(42, 48):
-            samples_path_list += glob(os.path.join(input_path, str(i), "*.mp4"))
-            # print (len(samples_path_list))
-        
-        # samples_path_list = samples_path_list[:512] # quick test
-        print ("Number of images = " + str(len(samples_path_list)))
-        num_batches = int(len(samples_path_list) / batch_size)
-        print ("Number of batches = " + str(num_batches))
-        
-        for batch_idx in range(num_batches):
-            batch_list.append(load_batch().astype(np.float32))
-    else:
-        num_batches = total_series_length//batch_size//truncated_backprop_length
+    for i in range(42, 48):
+        samples_path_list += glob(os.path.join(input_path, str(i), "*.mp4"))
+        # print (len(samples_path_list))
+    
+    samples_path_list = samples_path_list[:512] # quick test
+    print ("Number of images = " + str(len(samples_path_list)))
+    num_batches = int(len(samples_path_list) / batch_size)
+    print ("Number of batches = " + str(num_batches))
+    
+    for batch_idx in range(num_batches):
+        batch_list.append(load_batch().astype(np.float32))
 
     for epoch_idx in range(num_epochs):
         # samples_path_list = samples_path_list_full[:]
@@ -214,18 +187,11 @@ with tf.Session() as sess:
         print("New epoch", epoch_idx)
         batch_loss = 0
         for batch_idx in range(num_batches):
-            if use_real_images:
-                batchX = batch_list[batch_idx]
-                # batchX = load_batch().astype(np.float32)
-            else:
-                start_idx = batch_idx * truncated_backprop_length
-                end_idx = start_idx + truncated_backprop_length
+            batchX = batch_list[batch_idx]
+            # batchX = load_batch().astype(np.float32)
 
-                batchX = x[:,start_idx:end_idx]
-                batchY = y[:,start_idx:end_idx]
-
-            _total_loss, _train_step, _current_state, _logits_series = sess.run(
-                [total_loss, train_step, current_state, logits_series],
+            _total_loss, _train_step, _current_state, _logits_series, _f1= sess.run(
+                [total_loss, train_step, current_state, logits_series, f1],
                 feed_dict={
                     batchX_placeholder: batchX,
                     cell_state: _current_cell_state,
@@ -234,15 +200,16 @@ with tf.Session() as sess:
 
             _current_cell_state, _current_hidden_state = _current_state
 
-            if epoch_idx != 0 and batch_idx % 5 == 0:
+            if epoch_idx != 0 and batch_idx % 10 == 0:
                 loss_list.append(_total_loss)
             batch_loss += _total_loss
 
-            if batch_idx % 5 == 0:
+            if batch_idx % 10 == 0:
                 print("Step",batch_idx, "Loss", _total_loss)
+                # print("f1: %.8f" % _f1[0][0][0][0])
         
         if epoch_idx % 10 == 0:
-            save_sample(_logits_series, epoch_idx)
+            save_sample(_logits_series, epoch_idx, batch_list[num_batches-1])
 
         if epoch_idx != 0:
             plot_loss(loss_list)
@@ -253,15 +220,3 @@ plt.ioff()
 plt.show()
 
 ############################################## end main ##############################################
-
-
-
-
-############################################## test main #############################################
-
-# x,y = generateData()
-# print (x.shape)
-# print (x)
-# print (y)
-
-############################################ end test main ###########################################
