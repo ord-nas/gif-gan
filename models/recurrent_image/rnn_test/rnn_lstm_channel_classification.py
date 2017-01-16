@@ -77,8 +77,9 @@ def plot_loss(loss_list):
 
 ################################################ main ################################################
 
-batchX_placeholder = tf.placeholder(tf.float32, [batch_size, video_length, image_dimension, image_dimension, output_channels])
-batchY_placeholder = tf.placeholder(tf.int32, [batch_size, video_length, image_dimension, image_dimension, output_channels])
+batchINPUT_placeholder = tf.placeholder(tf.int32, [batch_size, video_length + 1, image_dimension, image_dimension, output_channels])
+batchX_placeholder = tf.cast(tf.slice(batchINPUT_placeholder, [0,0,0,0,0], [-1,video_length,-1,-1,-1]), tf.float32)
+batchY_placeholder = tf.slice(batchINPUT_placeholder, [0,1,0,0,0], [-1,-1,-1,-1,-1])
 
 # split channels for labels to reduce number of classes per channel
 batchY_placeholder_1st_channel = tf.cast(batchY_placeholder / 16, tf.int32)
@@ -166,8 +167,8 @@ losses = [tf.nn.sparse_softmax_cross_entropy_with_logits(logits, labels) for log
 total_loss = tf.reduce_mean(losses)
 
 # train_step = tf.train.GradientDescentOptimizer(1).minimize(total_loss)
-train_step = tf.train.AdagradOptimizer(0.3).minimize(total_loss)
-# train_step = tf.train.AdamOptimizer(0.0003).minimize(total_loss)
+# train_step = tf.train.AdagradOptimizer(0.3).minimize(total_loss)
+train_step = tf.train.AdamOptimizer(0.0003).minimize(total_loss)
 # train_step = tf.train.AdadeltaOptimizer().minimize(total_loss)
 
 with tf.Session() as sess:
@@ -201,15 +202,13 @@ with tf.Session() as sess:
         print("New epoch", epoch_idx)
         batch_loss = 0
         for batch_idx in range(num_batches):
-            batchX = batch_list[batch_idx][:,:-1,:].astype(np.float32)
-            batchY = batch_list[batch_idx][:,1:,:]
+            batchINPUT = batch_list[batch_idx]
             # batchX = load_batch().astype(np.float32)
 
             _total_loss, _train_step, _current_state, _logits_series, _predictions_series= sess.run(
                 [total_loss, train_step, current_state, logits_series, predictions_series],
                 feed_dict={
-                    batchX_placeholder: batchX,
-                    batchY_placeholder: batchY,
+                    batchINPUT_placeholder: batchINPUT,
                     cell_state: _current_cell_state,
                     hidden_state: _current_hidden_state
                 })
