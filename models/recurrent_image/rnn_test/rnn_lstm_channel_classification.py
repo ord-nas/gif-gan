@@ -22,17 +22,17 @@ output_channels = 3
 image_dimension = 32
 image_size = image_dimension * image_dimension
 
-filter_dimension = [8, 4, 4, 4]
+filter_dimension = [4, 4, 4, 4]
 stride = [2, 2, 2, 2]
 
-state_channels = 24
-state_dimension = int(image_dimension / 4)
+state_channels = 48
+state_dimension = int(image_dimension / 16)
 state_size = state_channels * state_dimension * state_dimension
 # state_size = image_size * output_channels
 
-output_shape = [[batch_size, state_dimension * stride[0], state_dimension * stride[0], 48],
-                # [batch_size, state_dimension * stride[0] * stride[1], state_dimension * stride[0]* stride[1], 16],
-                # [batch_size, state_dimension * stride[0] * stride[1] * stride[2], state_dimension * stride[0]* stride[1] * stride[2], 16],
+output_shape = [[batch_size, state_dimension * stride[0], state_dimension * stride[0], 24],
+                [batch_size, state_dimension * stride[0] * stride[1], state_dimension * stride[0]* stride[1], 16],
+                [batch_size, state_dimension * stride[0] * stride[1] * stride[2], state_dimension * stride[0]* stride[1] * stride[2], 16],
                 [batch_size, image_dimension, image_dimension, output_channels * 2 * num_classes]]
 
 def load_batch():
@@ -54,7 +54,7 @@ def load_batch():
             # im = cv2.cvtColor(cv2.resize(im, (image_dimension, image_dimension)), 6)
             im = cv2.resize(im, (image_dimension, image_dimension))
             # x[img_idx][frame_num] = im.reshape((image_size * output_channels))
-            x[img_idx][frame_num] = im
+            x[img_idx][frame_num] = im.astype(np.uint8)
             frame_num += 1
 
         cap.release()
@@ -101,8 +101,8 @@ states_series, current_state = tf.nn.rnn(cell, inputs_series, init_state)
 # Filters for deconvolutions
 f1 = tf.Variable(np.random.rand(filter_dimension[0], filter_dimension[0], output_shape[0][3], state_channels),dtype=tf.float32)
 f2 = tf.Variable(np.random.rand(filter_dimension[1], filter_dimension[1], output_shape[1][3], output_shape[0][3]),dtype=tf.float32)
-# f3 = tf.Variable(np.random.rand(filter_dimension[2], filter_dimension[2], output_shape[2][3], output_shape[1][3]),dtype=tf.float32)
-# f4 = tf.Variable(np.random.rand(filter_dimension[3], filter_dimension[3], output_shape[3][3], output_shape[2][3]),dtype=tf.float32)
+f3 = tf.Variable(np.random.rand(filter_dimension[2], filter_dimension[2], output_shape[2][3], output_shape[1][3]),dtype=tf.float32)
+f4 = tf.Variable(np.random.rand(filter_dimension[3], filter_dimension[3], output_shape[3][3], output_shape[2][3]),dtype=tf.float32)
 
 logits_series = []
 
@@ -130,37 +130,35 @@ for state in states_series:
     else:
         relu_2 = bn_2
     deconv_2 = tf.nn.conv2d_transpose(relu_2, f2, output_shape[1], [1,stride[1],stride[1],1], "SAME")
-    logits_series.append(tf.reshape(deconv_2, [batch_size, image_dimension, image_dimension, output_channels * 2, num_classes]))
+    # logits_series.append(tf.reshape(deconv_2, [batch_size, image_dimension, image_dimension, output_channels * 2, num_classes]))
 
-    # if enable_bn:
-    #     mean_3, variance_3 = tf.nn.moments(deconv_2, axes = [0, 1, 2])
-    #     bn_3 = tf.nn.batch_normalization(deconv_2, mean_3, variance_3, None, None, 1e-3)
-    # else:
-    #     bn_3 = deconv_2
-    # if enable_relu:
-    #     relu_3 = tf.nn.relu(bn_3)
-    # else:
-    #     relu_3 = bn_3
-    # deconv_3 = tf.nn.conv2d_transpose(relu_3, f3, output_shape[2], [1,stride[2],stride[2],1], "SAME")
+    if enable_bn:
+        mean_3, variance_3 = tf.nn.moments(deconv_2, axes = [0, 1, 2])
+        bn_3 = tf.nn.batch_normalization(deconv_2, mean_3, variance_3, None, None, 1e-3)
+    else:
+        bn_3 = deconv_2
+    if enable_relu:
+        relu_3 = tf.nn.relu(bn_3)
+    else:
+        relu_3 = bn_3
+    deconv_3 = tf.nn.conv2d_transpose(relu_3, f3, output_shape[2], [1,stride[2],stride[2],1], "SAME")
 
-    # if enable_bn:
-    #     mean_4, variance_4 = tf.nn.moments(deconv_3, axes = [0, 1, 2])
-    #     bn_4 = tf.nn.batch_normalization(deconv_3, mean_4, variance_4, None, None, 1e-3)
-    # else:
-    #     bn_4 = deconv_3
-    # if enable_relu:
-    #     relu_4 = tf.nn.relu(bn_4)
-    # else:
-    #     relu_4 = bn_4
-    # deconv_4 = tf.nn.conv2d_transpose(relu_4, f4, output_shape[3], [1,stride[3],stride[3],1], "SAME")
+    if enable_bn:
+        mean_4, variance_4 = tf.nn.moments(deconv_3, axes = [0, 1, 2])
+        bn_4 = tf.nn.batch_normalization(deconv_3, mean_4, variance_4, None, None, 1e-3)
+    else:
+        bn_4 = deconv_3
+    if enable_relu:
+        relu_4 = tf.nn.relu(bn_4)
+    else:
+        relu_4 = bn_4
+    deconv_4 = tf.nn.conv2d_transpose(relu_4, f4, output_shape[3], [1,stride[3],stride[3],1], "SAME")
 
-    # logits_series.append(tf.reshape(deconv_4, [batch_size, image_dimension, image_dimension, output_channels * 2, num_classes]))
+    logits_series.append(tf.reshape(deconv_4, [batch_size, image_dimension, image_dimension, output_channels * 2, num_classes]))
 
 predictions_series_splitted = [tf.argmax(tf.nn.softmax(logits), 4) for logits in logits_series]
 # re-combine channels
 predictions_series = [prediction[:,:,:,0:3]*16 + prediction[:,:,:,3:6] for prediction in predictions_series_splitted]
-test_labels_series = [label[:,:,:,0:3]*16 + label[:,:,:,3:6] for label in labels_series]
-
 
 # losses = [tf.nn.sigmoid_cross_entropy_with_logits(logits, labels) for logits, labels in zip(logits_series,labels_series)]
 losses = [tf.nn.sparse_softmax_cross_entropy_with_logits(logits, labels) for logits, labels in zip(logits_series,labels_series)]
@@ -182,7 +180,7 @@ with tf.Session() as sess:
     samples_path_list = []
     batch_list = []
 
-    for i in range(47, 48):
+    for i in range(46, 48):
         samples_path_list += glob(os.path.join(input_path, str(i), "*.mp4"))
         # print (len(samples_path_list))
     
@@ -222,7 +220,7 @@ with tf.Session() as sess:
             if batch_idx % 10 == 0:
                 print("Step",batch_idx, "Loss", _total_loss)
         
-        if epoch_idx % 10 == 0:
+        if epoch_idx % 5 == 0:
             save_sample(_predictions_series, epoch_idx, batch_list[num_batches-1])
 
         if epoch_idx != 0:
