@@ -37,7 +37,7 @@ layer_shapes = [[batch_size, 4, 4, 512],
 fc_size = layer_shapes[0][1] * layer_shapes[0][2] * layer_shapes[0][3]
 
 state_size = 100
-
+stddev = 0.02
 model_dir = "%s_%s" % (batch_size, image_dimension)
 
 def load_batch():
@@ -133,10 +133,10 @@ with tf.variable_scope("generator") as vs_g:
     init_state = tf.nn.rnn_cell.LSTMStateTuple(cell_state, hidden_state)
 
     # Filters for input-to-RNN
-    conv_f1 = tf.Variable(np.random.rand(filter_dimension, filter_dimension, layer_shapes[4][3], layer_shapes[3][3]),dtype=tf.float32)
-    conv_f2 = tf.Variable(np.random.rand(filter_dimension, filter_dimension, layer_shapes[3][3], layer_shapes[2][3]),dtype=tf.float32)
-    conv_f3 = tf.Variable(np.random.rand(filter_dimension, filter_dimension, layer_shapes[2][3], layer_shapes[1][3]),dtype=tf.float32)
-    conv_f4 = tf.Variable(np.random.rand(filter_dimension, filter_dimension, layer_shapes[1][3], layer_shapes[0][3]),dtype=tf.float32)
+    conv_f1 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[4][3], layer_shapes[3][3])), dtype=tf.float32)
+    conv_f2 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[3][3], layer_shapes[2][3])), dtype=tf.float32)
+    conv_f3 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[2][3], layer_shapes[1][3])), dtype=tf.float32)
+    conv_f4 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[1][3], layer_shapes[0][3])), dtype=tf.float32)
     conv_f_list = [conv_f1, conv_f2, conv_f3, conv_f4]
     # input_fc_w = tf.Variable(np.random.rand(fc_size, state_size),dtype=tf.float32)
     # input_fc_bias = tf.Variable(np.random.rand(1, state_size),dtype=tf.float32)
@@ -160,12 +160,12 @@ with tf.variable_scope("generator") as vs_g:
     states_series, current_state = tf.nn.rnn(cell, inputs_series, init_state)
 
     # Filters for states-to-output
-    output_fc_w = tf.Variable(np.random.rand(state_size, fc_size),dtype=tf.float32)
-    output_fc_bias = tf.Variable(np.random.rand(1, fc_size),dtype=tf.float32)
-    deconv_f1 = tf.Variable(np.random.rand(filter_dimension, filter_dimension, layer_shapes[1][3], layer_shapes[0][3]),dtype=tf.float32)
-    deconv_f2 = tf.Variable(np.random.rand(filter_dimension, filter_dimension, layer_shapes[2][3], layer_shapes[1][3]),dtype=tf.float32)
-    deconv_f3 = tf.Variable(np.random.rand(filter_dimension, filter_dimension, layer_shapes[3][3], layer_shapes[2][3]),dtype=tf.float32)
-    deconv_f4 = tf.Variable(np.random.rand(filter_dimension, filter_dimension, layer_shapes[4][3], layer_shapes[3][3]),dtype=tf.float32)
+    output_fc_w = tf.Variable(np.random.normal(scale=stddev, size=(state_size, fc_size)), dtype=tf.float32)
+    output_fc_bias = tf.Variable(np.zeros((1, fc_size)),dtype=tf.float32)
+    deconv_f1 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[1][3], layer_shapes[0][3])), dtype=tf.float32)
+    deconv_f2 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[2][3], layer_shapes[1][3])), dtype=tf.float32)
+    deconv_f3 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[3][3], layer_shapes[2][3])), dtype=tf.float32)
+    deconv_f4 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[4][3], layer_shapes[3][3])), dtype=tf.float32)
     deconv_f_list = [deconv_f1, deconv_f2, deconv_f3, deconv_f4]
 
     # States-to-Output
@@ -193,15 +193,15 @@ with tf.variable_scope("generator") as vs_g:
 with tf.variable_scope("discriminator") as vs_d:
 
     # Filters for conv layers
-    d_conv_f1 = tf.Variable(np.random.rand(filter_dimension, filter_dimension, layer_shapes[4][3], layer_shapes[3][3]),dtype=tf.float32)
-    d_conv_f2 = tf.Variable(np.random.rand(filter_dimension, filter_dimension, layer_shapes[3][3], layer_shapes[2][3]),dtype=tf.float32)
-    d_conv_f3 = tf.Variable(np.random.rand(filter_dimension, filter_dimension, layer_shapes[2][3], layer_shapes[1][3]),dtype=tf.float32)
-    d_conv_f4 = tf.Variable(np.random.rand(filter_dimension, filter_dimension, layer_shapes[1][3], layer_shapes[0][3]),dtype=tf.float32)
+    d_conv_f1 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[4][3], layer_shapes[3][3])), dtype=tf.float32)
+    d_conv_f2 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[3][3], layer_shapes[2][3])), dtype=tf.float32)
+    d_conv_f3 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[2][3], layer_shapes[1][3])), dtype=tf.float32)
+    d_conv_f4 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[1][3], layer_shapes[0][3])), dtype=tf.float32)
     d_conv_f_list = [d_conv_f1, d_conv_f2, d_conv_f3, d_conv_f4]
-    d_fc_w = tf.Variable(np.random.rand(fc_size, state_size),dtype=tf.float32)
-    d_fc_bias = tf.Variable(np.random.rand(1, state_size),dtype=tf.float32)
-    d_final_fc_w = tf.Variable(np.random.rand(state_size * video_length, 1),dtype=tf.float32)
-    d_final_fc_bias = tf.Variable(np.random.rand(1, 1),dtype=tf.float32)
+    d_fc_w = tf.Variable(np.random.normal(scale=stddev, size=(fc_size, state_size)), dtype=tf.float32)
+    d_fc_bias = tf.Variable(np.zeros((1, state_size)),dtype=tf.float32)
+    d_final_fc_w = tf.Variable(np.random.normal(scale=stddev, size=(state_size * video_length, 1)), dtype=tf.float32)
+    d_final_fc_bias = tf.Variable(np.zeros((1, 1)),dtype=tf.float32)
 
     # Process generator outputs (fake input)
     discriminator_outputs_series = []
@@ -219,7 +219,8 @@ with tf.variable_scope("discriminator") as vs_d:
 
     # final fc layer
     concatenated_outputs = tf.concat(1, discriminator_outputs_series)
-    d_score_fake_input = tf.matmul(concatenated_outputs, d_final_fc_w) + d_final_fc_bias
+    d_score_fake_input_logits = tf.matmul(concatenated_outputs, d_final_fc_w) + d_final_fc_bias
+    d_score_fake_input = tf.reduce_mean(tf.sigmoid(d_score_fake_input_logits))
 
     # Process training labels (real input)
     discriminator_outputs_series = []
@@ -237,15 +238,16 @@ with tf.variable_scope("discriminator") as vs_d:
 
     # final fc layer
     concatenated_outputs = tf.concat(1, discriminator_outputs_series)
-    d_score_real_input = tf.matmul(concatenated_outputs, d_final_fc_w) + d_final_fc_bias
+    d_score_real_input_logits = tf.matmul(concatenated_outputs, d_final_fc_w) + d_final_fc_bias
+    d_score_real_input = tf.reduce_mean(tf.sigmoid(d_score_real_input_logits))
 
     discriminator_variables = [v for v in tf.all_variables() if v.name.startswith(vs_d.name)]
 
 
 # Loss Functions
-g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(d_score_fake_input, tf.ones_like(d_score_fake_input)))
-d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(d_score_fake_input, tf.zeros_like(d_score_fake_input)))
-d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(d_score_real_input, tf.ones_like(d_score_real_input)))
+g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(d_score_fake_input_logits, tf.ones_like(d_score_fake_input_logits)))
+d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(d_score_fake_input_logits, tf.zeros_like(d_score_fake_input_logits)))
+d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(d_score_real_input_logits, tf.ones_like(d_score_real_input_logits)))
 d_loss = d_loss_fake + d_loss_real
 
 # model saver
@@ -295,7 +297,8 @@ with tf.Session() as sess:
             batchX = load_batch().astype(np.float32)
 
             # Update Discriminator
-            _d_loss, _d_optim = sess.run([d_loss, d_optim],
+            _d_loss, _d_optim, _d_score_real_input, _d_score_fake_input = sess.run(
+                [d_loss, d_optim, d_score_real_input, d_score_fake_input],
                 feed_dict={
                     batchINPUT_placeholder: batchX,
                     cell_state: _current_cell_state,
@@ -323,7 +326,7 @@ with tf.Session() as sess:
             #     loss_list.append(_total_loss)
 
             if batch_idx % 5 == 0:
-                print("Step", batch_idx, "D_Loss", _d_loss, "G_Loss", _g_loss)
+                print("Step", batch_idx, "D_Loss", _d_loss, "G_Loss", _g_loss, "D_Score_R", _d_score_real_input, "D_Score_F", _d_score_fake_input)
 
             if batch_idx % 20 == 0:
                 # plot_loss(loss_list)
