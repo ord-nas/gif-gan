@@ -126,6 +126,14 @@ class VID_DCGAN(object):
         print "DISTANCE:", distance.get_shape().as_list()
         self.loss = tf.reduce_mean(distance)
         print "LOSS:", self.loss.get_shape().as_list()
+        self.per_video_loss = tf.reduce_mean(tf.reshape(distance, [self.sample_rows,
+                                                                   self.sample_cols,
+                                                                   self.vid_length]),
+                                             reduction_indices=[0,2])
+        self.sanity_check_loss = tf.reduce_mean(tf.reshape(distance, [self.sample_rows,
+                                                                      self.sample_cols,
+                                                                      self.vid_length]),
+                                                reduction_indices=[2])
 
     def load_image_gan(self, sess, checkpoint_dir):
         print "Loading checkpoints from", checkpoint_dir
@@ -190,14 +198,19 @@ class VID_DCGAN(object):
 
         # Main train loop
         for epoch in xrange(config.epoch):
-            _, loss_value = sess.run([g_optim, self.loss], feed_dict={
-                self.target_activations_tensor: target_activations,
-                self.is_training: True,
-            })
-            print "Step %d/%d: loss %f" % (epoch, config.epoch, loss_value)
+            _, loss_value, pv_loss, sanity_loss =sess.run(
+                [g_optim, self.loss, self.per_video_loss, self.sanity_check_loss],
+                feed_dict={
+                    self.target_activations_tensor: target_activations,
+                    self.is_training: True,
+                }
+            )
+            print "Step %d/%d: loss %f (%s)" % (epoch, config.epoch, loss_value, pv_loss)
             if epoch % 10 == 0:
                 self.dump_sample(sess, config, epoch, 0, is_training=True)
                 self.dump_sample(sess, config, epoch, 0, is_training=False)
+                print "Sanity check loss:"
+                print sanity_loss
 
     def dump_sample(self, sess, config, epoch, idx, is_training=False):
         sz = self.output_image_size
@@ -334,6 +347,7 @@ class VID_DCGAN(object):
 
 def main(_):
     pp.pprint(flags.FLAGS.__flags)
+    np.set_printoptions(threshold=np.nan)
 
     with tf.Session() as sess:
         with tf.variable_scope('video_gan'):
