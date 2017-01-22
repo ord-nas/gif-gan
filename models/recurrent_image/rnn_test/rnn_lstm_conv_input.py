@@ -10,7 +10,7 @@ import cv2
 input_path = "/media/charles/850EVO/ubuntu_documents/ece496/gif-gan/data_collection/data/processed/"
 saved_sample_path = "io_tests/test_output"
 checkpoint_path = "model_checkpoints"
-load = False
+load = True
 quick_test = False
 
 video_length = 16
@@ -37,6 +37,8 @@ layer_shapes = [[batch_size, 4, 4, 512],
 fc_size = layer_shapes[0][1] * layer_shapes[0][2] * layer_shapes[0][3]
 
 state_size = 100
+
+model_dir = "%s_%s" % (batch_size, image_dimension)
 
 def load_batch():
     global samples_path_list
@@ -83,12 +85,15 @@ def plot_loss(loss_list):
 
 def save_checkpoint(checkpoint_dir):
     global saver
+    global epoch_idx
 
     model_name = "recurrent.model"
-    model_dir = "%s_%s" % (batch_size, image_dimension)
     checkpoint_dir = os.path.join(checkpoint_dir, model_dir)
 
-    if not os.path.exists(checkpoint_dir):
+    if os.path.exists(checkpoint_dir):
+        if epoch_idx == 0 and (not load):
+            sys.exit("Model checkpoint already exists. Exit...")
+    else:
         os.makedirs(checkpoint_dir)
 
     saver.save(sess, os.path.join(checkpoint_dir, model_name))
@@ -97,7 +102,6 @@ def load_checkpoint(checkpoint_dir):
     global saver
 
     print("Reading checkpoints...")
-    model_dir = "%s_%s" % (batch_size, image_dimension)
     checkpoint_dir = os.path.join(checkpoint_dir, model_dir)
 
     ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
@@ -252,7 +256,8 @@ with tf.Session() as sess:
         
         print ("Average Loss = %.8f" % (batch_loss / num_batches))
 
-        save_checkpoint(checkpoint_path)
+        if not quick_test:
+            save_checkpoint(checkpoint_path)
 
 plt.ioff()
 plt.show()
