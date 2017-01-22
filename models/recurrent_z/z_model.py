@@ -1,4 +1,5 @@
 import os
+import sys
 from ops import *
 #import scipy.misc
 import numpy as np
@@ -43,6 +44,7 @@ flags.DEFINE_boolean("train_img_gen", False, "True to make the image generator p
 flags.DEFINE_boolean("train_img_disc", False, "True to make the image discriminator params trainable [False]")
 flags.DEFINE_integer("disc_updates", 1, "Number of discriminator updates per batch [1]")
 flags.DEFINE_integer("gen_updates", 2, "Number of generator updates per batch [1]")
+flags.DEFINE_string("target_video", "", "Video to try to recreate")
 FLAGS = flags.FLAGS
 
 class Layers(object):
@@ -79,8 +81,8 @@ class VID_DCGAN(object):
 
     def build_model(self, sess):
         # Build generator
-        self.z = tf.placeholder(tf.float32, [self.batch_size, self.z_input_size],
-                                name='gvideo_z')
+        self.z = tf.get_variable('gvideo_z', [self.batch_size, self.z_input_size],
+                                 initializer=tf.random_uniform_initializer(minval=-1.0, maxval=1.0))
         with tf.variable_scope('video_generator'):
             print "Making generator..."
             self.G, self.G_layers = self.generator(self.z, reuse=False, train=True)
@@ -104,11 +106,7 @@ class VID_DCGAN(object):
         with tf.variable_scope('video_discriminator'):
             print "Scope name:", tf.get_variable_scope().name
             print "Making first discriminator..."
-            self.d_real_out, self.d_real_out_logits, self.D_real_layers = self.discriminator(
-                self.img_dcgan.D_activations_inf, reuse=False)
-            print "Making second discriminator..."
-            self.d_fake_out, self.d_fake_out_logits, self.D_fake_layers = self.discriminator(
-                self.img_dcgan.D_activations_inf_, reuse=True)
+            #self.d_loss = self.discriminator()
 
         # Define trainable variables
         t_vars = tf.trainable_variables()
@@ -118,13 +116,16 @@ class VID_DCGAN(object):
         self.g_img_vars = [var for var in t_vars if 'g_' in var.name]
 
         # Define loss
-        self.d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-            self.d_real_out_logits, tf.ones_like(self.d_real_out)))
-        self.d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-            self.d_fake_out_logits, tf.zeros_like(self.d_fake_out)))
-        self.d_loss = self.d_loss_real + self.d_loss_fake
-        self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-            self.d_fake_out_logits, tf.ones_like(self.d_fake_out)))
+        self.target_activations_tensor = tf.placeholder(
+            tf.float32, self.img_dcgan.D_activations_inf.get_shape().as_list(), 'target_activations')
+        activations_tensor = self.img_dcgan.D_activations_inf_
+        print "ACTIVATIONS TENSOR:", activations_tensor.get_shape().as_list()
+        print "TARGET ACTIVATIONS:", self.target_activations_tensor.get_shape().as_list()
+        distance = tf.sqrt(tf.reduce_sum(tf.square(activations_tensor - self.target_activations_tensor),
+                                         reduction_indices=[1,2,3]))
+        print "DISTANCE:", distance.get_shape().as_list()
+        self.loss = tf.reduce_mean(distance)
+        print "LOSS:", self.loss.get_shape().as_list()
 
     def load_image_gan(self, sess, checkpoint_dir):
         print "Loading checkpoints from", checkpoint_dir
@@ -146,37 +147,38 @@ class VID_DCGAN(object):
             print "FAIL!"
         
     def train(self, sess, config):
-        files = []
-        for lst in config.video_list:
-            with open(lst, 'r') as f:
-                for video in f:
-                    video = video.strip()
-                    if not video:
-                        continue
-                    video = os.path.join(config.video_data_dir,
-                                         config.video_dataset,
-                                         video)
-                    files.append(video)
+        # Load the target video
+        video = np.zeros(shape=(self.vid_length, self.input_image_size, self.input_image_size, self.c_dim))
+        cap = cv2.VideoCapture(config.target_video)
+        frame = 0
+        while(cap.isOpened() and frame < self.vid_length):
+            ret, im = cap.read()
+            if not ret:
+                break
+            im = cv2.resize(im, (self.input_image_size, self.input_image_size),
+                            interpolation=cv2.INTER_LINEAR)
+            assert im.shape == (self.input_image_size, self.input_image_size, self.c_dim)
+            im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+            im = transform(im, is_crop=False)
+            video[frame,:,:,:] = im
+            frame += 1
+        assert frame == self.vid_length
+        video_batch = np.concatenate([video] * self.batch_size)
 
-        print "Total video files found:", len(files)
-        if config.video_shuffle:
-            np.random.shuffle(files)
+        # Trying to write out what we read in just to avoid stupid mistakes
+        self.output_video_batch(video_batch, "OUTPUT_VIDEO_BATCH.mp4")
+
+        # Compute the discriminator activations for the target
+        target_activations = sess.run(self.img_dcgan.D_activations_inf, feed_dict={
+            self.img_dcgan.images: video_batch,
+        })
 
         # Create optimizers
         with tf.variable_scope("optimizers"):
-            print "Creating discriminator optimizers..."
-            d_vars = self.d_vid_vars
-            if config.train_img_disc:
-                d_vars = d_vars + self.d_img_vars
-            d_optim = (tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1)
-                       .minimize(self.d_loss, var_list=d_vars))
-
             print "Creating generator optimizers..."
             g_vars = self.g_vid_vars
-            if config.train_img_gen:
-                g_vars = g_vars + self.g_img_vars
             g_optim = (tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1)
-                       .minimize(self.g_loss, var_list=g_vars))
+                       .minimize(self.loss, var_list=g_vars))
 
             # Initialize variables created by optimizers
             current_scope_name = tf.get_variable_scope().name + "/"
@@ -184,62 +186,20 @@ class VID_DCGAN(object):
                                            scope=current_scope_name)
             sess.run(tf.variables_initializer(scope_vars))
 
-        sample_z = np.random.uniform(-1, 1, size=(self.sample_rows * self.sample_cols,
-                                                  self.z_input_size))
-
-        # Initialize a saver
-        saver = tf.train.Saver()
-        writer = tf.summary.FileWriter(config.log_dir, sess.graph)
-
         # Main train loop
-        counter = 0
-        batch_size = self.batch_size
         for epoch in xrange(config.epoch):
-            for i in xrange(0, len(files) // batch_size):
-                batch_files = files[i*batch_size:(i+1)*batch_size]
-                batch_images = self.load_videos(batch_files)
-                batch_z = np.random.uniform(-1, 1, size=(
-                    self.batch_size, self.z_input_size)).astype(np.float32)
+            _, loss_value = sess.run([g_optim, self.loss], feed_dict={
+                self.target_activations_tensor: target_activations,
+                self.is_training: True,
+            })
+            print "Step %d/%d: loss %f" % (epoch, config.epoch, loss_value)
+            if epoch % 10 == 0:
+                self.dump_sample(sess, config, epoch, 0, is_training=True)
+                self.dump_sample(sess, config, epoch, 0, is_training=False)
 
-                # Update D
-                d_losses = []
-                for _ in xrange(config.disc_updates):
-                    _, d_loss_value = sess.run([d_optim, self.d_loss], feed_dict={
-                        self.img_dcgan.images: batch_images,
-                        self.z: batch_z,
-                        self.is_training: True,
-                    })
-                    d_losses.append(d_loss_value)
-
-                # Update G
-                g_losses = []
-                for _ in xrange(config.gen_updates):
-                    _, g_loss_value = sess.run([g_optim, self.g_loss], feed_dict={
-                        self.z: batch_z,
-                        self.is_training: True,
-                    })
-                    g_losses.append(g_loss_value)
-
-                # errD_fake = 0#self.d_loss_fake.eval({self.z: batch_z})
-                # errD_real = 0#self.d_loss_real.eval({self.img_dcgan.images: batch_images})
-                # errG = 0#self.g_loss.eval({self.z: batch_z})
-                counter += 1
-                print("Epoch: [%2d] [%4d/%4d] d_loss: %s, g_loss: %s" \
-                      % (epoch, i+1, len(files) // batch_size,
-                         d_losses, g_losses))
-
-                if counter % 10 == 0:
-                    self.dump_sample(sample_z, sess, config, epoch, i, is_training=True)
-                    self.dump_sample(sample_z, sess, config, epoch, i, is_training=False)
-                    saver.save(sess,
-                               os.path.join(config.video_checkpoint_dir,
-                                            "VID_DCGAN.model"),
-                               global_step=counter)
-
-    def dump_sample(self, sample_z, sess, config, epoch, idx, is_training=False):
+    def dump_sample(self, sess, config, epoch, idx, is_training=False):
         sz = self.output_image_size
         samples = sess.run([self.img_dcgan.sampler], feed_dict={
-            self.z: sample_z,
             self.is_training: is_training,
         })
         videos = np.reshape(samples, [self.sample_rows,
@@ -354,52 +314,20 @@ class VID_DCGAN(object):
 
         return layers.gr4_1d, layers
 
-    def discriminator(self, vid, reuse=False):
-        layers = Layers()
-        if reuse:
-            tf.get_variable_scope().reuse_variables()
+    def output_video_batch(self, video, filename):
+        w = cv2.VideoWriter(filename,
+                            0x20,
+                            25.0,
+                            (self.output_image_size, self.output_image_size))
+        for frame in video:
+            im = inverse_transform(frame)
+            im = np.around(im * 255).astype('uint8')
+            im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+            w.write(im)
+        w.release()
 
-        # First we wanna just project into a reasonable shape.
-        # Squeeze all of the per-frame stuff togther.
-        
-        # We are now imagining the output as a 2D output of video_length *
-        # discriminator_activations. It's not really meaningful to convolve
-        # across the activations (since we are treating them as if they are
-        # unordered), but we can convolve across the video_length. The reason we
-        # want to treat it as 2D instead of 1D + filter dimension is that we
-        # will use a convolution filter that has only height of 1 and this will
-        # keep each dimension independent (until the very end with the sigmoid).
-        print "vid:", vid.get_shape().as_list()
-        vid = tf.reshape(vid, [self.batch_size, -1, self.vid_length, 1])
-        print "vid (reshaped):", vid.get_shape().as_list()
-
-        # f = self.z_output_size # No reason for it to be this number other than symmetry
-        # f, f2, f4, f8, f16 = [int(f*x) for x in np.logspace(math.log10(1),
-        #                                                     math.log10(2),
-        #                                                     5)]
-        k_w = 3
-        
-        # layers.vid_project, layers.d0_w, layers.d0_b = linear(
-        #     vid, f, 'dvideo_0', with_w=True)
-        # print "vid_project:", layers.vid_project.get_shape().as_list()
-
-        # layers.d0 = tf.reshape(layers.vid_project, [self.batch_size, 1, self.vid_length, -1])
-        # layers.dr0 = tf.nn.relu(self.d_bn0(layers.d0))
-        # print "dr0:", layers.dr0.get_shape().as_list()
-
-        layers.dr0 = vid
-        layers.dr1 = lrelu(conv2d(layers.dr0, 2, k_h=1, k_w=k_w, d_h=1, name='dvideo_h1'))
-        print "dr1:", layers.dr1.get_shape().as_list()
-        layers.dr2 = lrelu(self.d_bn2(conv2d(layers.dr1, 4, k_h=1, k_w=k_w, d_h=1, name='dvideo_h2')))
-        print "dr2:", layers.dr2.get_shape().as_list()
-        layers.dr3 = lrelu(self.d_bn3(conv2d(layers.dr2, 8, k_h=1, k_w=k_w, d_h=1, name='dvideo_h3')))
-        print "dr3:", layers.dr3.get_shape().as_list()
-        layers.dr4 = lrelu(self.d_bn4(conv2d(layers.dr3, 16, k_h=1, k_w=k_w, d_h=1, name='dvideo_h4')))
-        print "dr4:", layers.dr4.get_shape().as_list()
-        layers.d5 = linear(tf.reshape(layers.dr4, [self.batch_size, -1]), 1, 'dvideo_h5')
-        print "d5:", layers.d5.get_shape().as_list()
-
-        return tf.nn.sigmoid(layers.d5), layers.d5, layers
+    def discriminator(self):
+        pass
 
 
 def main(_):
@@ -429,20 +357,20 @@ def main(_):
             # that we don't overwrite the weights we load.
             vid_dcgan.load_image_gan(sess, FLAGS.image_model_dir)
 
-            # Generate some z-vectors for one video.
-            sample_z = np.random.uniform(-1, 1, size=(FLAGS.vid_batch_size, vid_z_dim))
-            out_val = sess.run(vid_dcgan.G, feed_dict={vid_dcgan.z:sample_z})
-            print out_val.shape
+            # # Generate some z-vectors for one video.
+            # sample_z = np.random.uniform(-1, 1, size=(FLAGS.vid_batch_size, vid_z_dim))
+            # out_val = sess.run(vid_dcgan.G, feed_dict={vid_dcgan.z:sample_z})
+            # print out_val.shape
 
-            # Generate videos from the z-vectors
-            imgs = sess.run(vid_dcgan.img_dcgan.sampler, feed_dict={vid_dcgan.img_dcgan.sample_z:out_val})
-            vids = np.reshape(imgs, (-1, FLAGS.vid_length, FLAGS.output_size, FLAGS.output_size, FLAGS.c_dim))
-            print imgs.shape
-            print vids.shape
+            # # Generate videos from the z-vectors
+            # imgs = sess.run(vid_dcgan.img_dcgan.sampler, feed_dict={vid_dcgan.img_dcgan.sample_z:out_val})
+            # vids = np.reshape(imgs, (-1, FLAGS.vid_length, FLAGS.output_size, FLAGS.output_size, FLAGS.c_dim))
+            # print imgs.shape
+            # print vids.shape
 
-            # Test the discriminator
-            print "FAKE DISC", sess.run(vid_dcgan.d_fake_out, feed_dict={vid_dcgan.img_dcgan.z:out_val})
-            print "REAL DISC", sess.run(vid_dcgan.d_real_out, feed_dict={vid_dcgan.img_dcgan.images:imgs})
+            # # Test the discriminator
+            # print "FAKE DISC", sess.run(vid_dcgan.d_fake_out, feed_dict={vid_dcgan.img_dcgan.z:out_val})
+            # print "REAL DISC", sess.run(vid_dcgan.d_real_out, feed_dict={vid_dcgan.img_dcgan.images:imgs})
 
             # vid_dcgan.dump_sample(sample_z, sess, FLAGS, 4, 20)
             # return
