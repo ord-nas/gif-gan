@@ -240,7 +240,7 @@ with tf.Session() as sess:
                     hidden_state: _current_hidden_state
                 })
 
-            _current_cell_state, _current_hidden_state = _current_state
+            # _current_cell_state, _current_hidden_state = _current_state
 
             if (not (epoch_idx == 0 and batch_idx < 20)) and (batch_idx % 5 == 0):
                 loss_list.append(_total_loss)
