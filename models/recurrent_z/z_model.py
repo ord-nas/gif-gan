@@ -44,7 +44,7 @@ flags.DEFINE_boolean("train_img_gen", False, "True to make the image generator p
 flags.DEFINE_boolean("train_img_disc", False, "True to make the image discriminator params trainable [False]")
 flags.DEFINE_integer("disc_updates", 1, "Number of discriminator updates per batch [1]")
 flags.DEFINE_integer("gen_updates", 2, "Number of generator updates per batch [1]")
-flags.DEFINE_string("target_video", "", "Video to try to recreate")
+flags._global_parser.add_argument("--target_video", required=False, nargs='*', default=[], help="Video to try to recreate")
 FLAGS = flags.FLAGS
 
 class Layers(object):
@@ -148,22 +148,24 @@ class VID_DCGAN(object):
         
     def train(self, sess, config):
         # Load the target video
-        video = np.zeros(shape=(self.vid_length, self.input_image_size, self.input_image_size, self.c_dim))
-        cap = cv2.VideoCapture(config.target_video)
-        frame = 0
-        while(cap.isOpened() and frame < self.vid_length):
-            ret, im = cap.read()
-            if not ret:
-                break
-            im = cv2.resize(im, (self.input_image_size, self.input_image_size),
-                            interpolation=cv2.INTER_LINEAR)
-            assert im.shape == (self.input_image_size, self.input_image_size, self.c_dim)
-            im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-            im = transform(im, is_crop=False)
-            video[frame,:,:,:] = im
-            frame += 1
-        assert frame == self.vid_length
-        video_batch = np.concatenate([video] * self.batch_size)
+        videos = np.zeros(shape=(self.sample_cols * self.vid_length, self.input_image_size, self.input_image_size, self.c_dim))
+        assert self.sample_cols == len(config.target_video)
+        for (i, filename) in enumerate(config.target_video):
+            cap = cv2.VideoCapture(filename)
+            frame = 0
+            while(cap.isOpened() and frame < self.vid_length):
+                ret, im = cap.read()
+                if not ret:
+                    break
+                im = cv2.resize(im, (self.input_image_size, self.input_image_size),
+                                interpolation=cv2.INTER_LINEAR)
+                assert im.shape == (self.input_image_size, self.input_image_size, self.c_dim)
+                im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+                im = transform(im, is_crop=False)
+                videos[i*self.vid_length+frame,:,:,:] = im
+                frame += 1
+            assert frame == self.vid_length
+        video_batch = np.concatenate([videos] * self.sample_rows)
 
         # Trying to write out what we read in just to avoid stupid mistakes
         self.output_video_batch(video_batch, "OUTPUT_VIDEO_BATCH.mp4")
