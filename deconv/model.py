@@ -1,4 +1,3 @@
-from __future__ import division
 import os
 import time
 from glob import glob
@@ -65,8 +64,8 @@ class DCGAN(object):
         self.g_bn1 = ops.batch_norm(name='g_bn1')
         self.g_bn2 = ops.batch_norm(name='g_bn2')
 
-        if not self.y_dim:
-            self.g_bn3 = ops.batch_norm(name='g_bn3')
+        # if not self.y_dim:
+        self.g_bn3 = ops.batch_norm(name='g_bn3')
 
         self.dataset_name = dataset_name
         self.checkpoint_dir = checkpoint_dir
@@ -80,7 +79,12 @@ class DCGAN(object):
 
         self.images = tf.placeholder(
             tf.float32,
-            [self.batch_size] + [self.output_size, self.output_size, self.c_dim],
+            [self.batch_size] + [
+                self.output_size,
+                self.output_size,
+                self.output_duration,
+                self.c_dim
+            ],
             name='real_images'
         )
         self.sample_images= tf.placeholder(
@@ -112,7 +116,7 @@ class DCGAN(object):
 
         self.d_sum = tf.histogram_summary("d", self.D)
         self.d__sum = tf.histogram_summary("d_", self.D_)
-        self.G_sum = tf.image_summary("G", self.G)
+        # self.G_sum = tf.image_summary("G", self.G)
 
         self.d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
         self.d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
@@ -138,7 +142,7 @@ class DCGAN(object):
         # if config.dataset == 'mnist':
         #     data_X, data_y = self.load_mnist()
         # else:
-        data = glob(os.path.join("./data", config.dataset, "*.mp4"))
+        data = glob(os.path.join("/thesis0/yccggrp/dataset/face_mp4s/*/*.mp4"))
         #np.random.shuffle(data)
 
         d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
@@ -147,8 +151,13 @@ class DCGAN(object):
                           .minimize(self.g_loss, var_list=self.g_vars)
         tf.initialize_all_variables().run()
 
-        self.g_sum = tf.merge_summary([self.z_sum, self.d__sum, 
-            self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
+        self.g_sum = tf.merge_summary([
+            self.z_sum,
+            self.d__sum, 
+            # self.G_sum,
+            self.d_loss_fake_sum,
+            self.g_loss_sum
+        ])
         self.d_sum = tf.merge_summary([self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
         self.writer = tf.train.SummaryWriter("./logs", self.sess.graph)
 
@@ -171,7 +180,7 @@ class DCGAN(object):
             ) for sample_file in sample_files
         ]
         if (self.is_grayscale):
-            sample_images = np.array(sample).astype(np.float32)[:, :, :, None]
+            sample_images = np.array(sample).astype(np.float32)[:, :, :, :,None]
         else:
             sample_images = np.array(sample).astype(np.float32)
             
@@ -182,86 +191,112 @@ class DCGAN(object):
             print(" [*] Load SUCCESS")
         else:
             print(" [!] Load failed...")
+        print 'a'
 
         for epoch in xrange(config.epoch):
-            if config.dataset == 'mnist':
-                batch_idxs = min(len(data_X), config.train_size) // config.batch_size
-            else:            
-                data = glob(os.path.join("./data", config.dataset, "*.jpg"))
-                batch_idxs = min(len(data), config.train_size) // config.batch_size
+            # if config.dataset == 'mnist':
+            #     batch_idxs = min(len(data_X), config.train_size) // config.batch_size
+            # else:            
+            data = glob(
+                os.path.join("/thesis0/yccggrp/dataset/face_mp4s/*/*.mp4")
+            )
+            print len(data), config.train_size
+            batch_idxs = min(len(data), config.train_size) // config.batch_size
 
             for idx in xrange(0, batch_idxs):
-                if config.dataset == 'mnist':
-                    batch_images = data_X[idx*config.batch_size:(idx+1)*config.batch_size]
-                    batch_labels = data_y[idx*config.batch_size:(idx+1)*config.batch_size]
+                # if config.dataset == 'mnist':
+                #     batch_images = data_X[idx*config.batch_size:(idx+1)*config.batch_size]
+                #     batch_labels = data_y[idx*config.batch_size:(idx+1)*config.batch_size]
+                # else:
+                batch_files = data[idx*config.batch_size:(idx+1)*config.batch_size]
+                batch = [
+                    utils.get_image(
+                        batch_file,
+                        self.image_size,
+                        self.video_duration,
+                        is_crop=self.is_crop,
+                        resize_w=self.output_size,
+                        resize_t=self.output_duration,
+                        is_grayscale = self.is_grayscale
+                    ) for batch_file in batch_files
+                ]
+                if (self.is_grayscale):
+                    batch_images = np.array(batch).astype(np.float32)[:, :, :,:, None]
                 else:
-                    batch_files = data[idx*config.batch_size:(idx+1)*config.batch_size]
-                    batch = [get_image(batch_file, self.image_size, is_crop=self.is_crop, resize_w=self.output_size, is_grayscale = self.is_grayscale) for batch_file in batch_files]
-                    if (self.is_grayscale):
-                        batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
-                    else:
-                        batch_images = np.array(batch).astype(np.float32)
+                    batch_images = np.array(batch).astype(np.float32)
 
                 batch_z = np.random.uniform(-1, 1, [config.batch_size, self.z_dim]) \
                             .astype(np.float32)
 
-                if config.dataset == 'mnist':
-                    # Update D network
-                    _, summary_str = self.sess.run([d_optim, self.d_sum],
-                        feed_dict={ self.images: batch_images, self.z: batch_z, self.y:batch_labels })
-                    self.writer.add_summary(summary_str, counter)
+                # if config.dataset == 'mnist':
+                #     # Update D network
+                #     _, summary_str = self.sess.run([d_optim, self.d_sum],
+                #         feed_dict={ self.images: batch_images, self.z: batch_z, self.y:batch_labels })
+                #     self.writer.add_summary(summary_str, counter)
 
-                    # Update G network
-                    _, summary_str = self.sess.run([g_optim, self.g_sum],
-                        feed_dict={ self.z: batch_z, self.y:batch_labels })
-                    self.writer.add_summary(summary_str, counter)
+                #     # Update G network
+                #     _, summary_str = self.sess.run([g_optim, self.g_sum],
+                #         feed_dict={ self.z: batch_z, self.y:batch_labels })
+                #     self.writer.add_summary(summary_str, counter)
 
-                    # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-                    _, summary_str = self.sess.run([g_optim, self.g_sum],
-                        feed_dict={ self.z: batch_z, self.y:batch_labels })
-                    self.writer.add_summary(summary_str, counter)
+                #     # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
+                #     _, summary_str = self.sess.run([g_optim, self.g_sum],
+                #         feed_dict={ self.z: batch_z, self.y:batch_labels })
+                #     self.writer.add_summary(summary_str, counter)
                     
-                    errD_fake = self.d_loss_fake.eval({self.z: batch_z, self.y:batch_labels})
-                    errD_real = self.d_loss_real.eval({self.images: batch_images, self.y:batch_labels})
-                    errG = self.g_loss.eval({self.z: batch_z, self.y:batch_labels})
-                else:
-                    # Update D network
-                    _, summary_str = self.sess.run([d_optim, self.d_sum],
-                        feed_dict={ self.images: batch_images, self.z: batch_z })
-                    self.writer.add_summary(summary_str, counter)
+                #     errD_fake = self.d_loss_fake.eval({self.z: batch_z, self.y:batch_labels})
+                #     errD_real = self.d_loss_real.eval({self.images: batch_images, self.y:batch_labels})
+                #     errG = self.g_loss.eval({self.z: batch_z, self.y:batch_labels})
+                # else:
+                # Update D network
+                _, summary_str = self.sess.run(
+                    [d_optim, self.d_sum],
+                    feed_dict={ self.images: batch_images, self.z: batch_z }
+                )
+                self.writer.add_summary(summary_str, counter)
 
-                    # Update G network
-                    _, summary_str = self.sess.run([g_optim, self.g_sum],
-                        feed_dict={ self.z: batch_z })
-                    self.writer.add_summary(summary_str, counter)
+                # Update G network
+                _, summary_str = self.sess.run(
+                    [g_optim, self.g_sum],
+                    feed_dict={ self.z: batch_z }
+                )
+                self.writer.add_summary(summary_str, counter)
 
-                    # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-                    _, summary_str = self.sess.run([g_optim, self.g_sum],
-                        feed_dict={ self.z: batch_z })
-                    self.writer.add_summary(summary_str, counter)
-                    
-                    errD_fake = self.d_loss_fake.eval({self.z: batch_z})
-                    errD_real = self.d_loss_real.eval({self.images: batch_images})
-                    errG = self.g_loss.eval({self.z: batch_z})
+                # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
+                _, summary_str = self.sess.run(
+                    [g_optim, self.g_sum],
+                    feed_dict={ self.z: batch_z }
+                )
+                self.writer.add_summary(summary_str, counter)
+                
+                errD_fake = self.d_loss_fake.eval({self.z: batch_z})
+                errD_real = self.d_loss_real.eval({self.images: batch_images})
+                errG = self.g_loss.eval({self.z: batch_z})
 
                 counter += 1
                 print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
                     % (epoch, idx, batch_idxs,
                         time.time() - start_time, errD_fake+errD_real, errG))
 
-                if np.mod(counter, 100) == 1:
-                    if config.dataset == 'mnist':
-                        samples, d_loss, g_loss = self.sess.run(
-                            [self.sampler, self.d_loss, self.g_loss],
-                            feed_dict={self.z: sample_z, self.images: sample_images, self.y:batch_labels}
+                if np.mod(counter, 10) == 1:
+                    # if config.dataset == 'mnist':
+                    #     samples, d_loss, g_loss = self.sess.run(
+                    #         [self.sampler, self.d_loss, self.g_loss],
+                    #         feed_dict={self.z: sample_z, self.images: sample_images, self.y:batch_labels}
+                    #     )
+                    # else:
+                    samples, d_loss, g_loss = self.sess.run(
+                        [self.sampler, self.d_loss, self.g_loss],
+                        feed_dict={self.z: sample_z, self.images: sample_images}
+                    )
+
+                    utils.save_videos(
+                        samples,
+                        8,
+                        './{}/train_{:02d}_{:04d}'.format(
+                            config.sample_dir, epoch, idx
                         )
-                    else:
-                        samples, d_loss, g_loss = self.sess.run(
-                            [self.sampler, self.d_loss, self.g_loss],
-                            feed_dict={self.z: sample_z, self.images: sample_images}
-                        )
-                    save_images(samples, [8, 8],
-                                './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
+                    )
                     print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
 
                 if np.mod(counter, 500) == 2:
@@ -272,10 +307,10 @@ class DCGAN(object):
             tf.get_variable_scope().reuse_variables()
 
         # if not self.y_dim:
-        h0 = ops.lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
-        h1 = ops.lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, name='d_h1_conv')))
-        h2 = ops.lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, name='d_h2_conv')))
-        h3 = ops.lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, name='d_h3_conv')))
+        h0 = ops.lrelu(ops.conv3d(image, self.df_dim, name='d_h0_conv'))
+        h1 = ops.lrelu(self.d_bn1(ops.conv3d(h0, self.df_dim*2, name='d_h1_conv')))
+        h2 = ops.lrelu(self.d_bn2(ops.conv3d(h1, self.df_dim*4, name='d_h2_conv')))
+        h3 = ops.lrelu(self.d_bn3(ops.conv3d(h2, self.df_dim*8, name='d_h3_conv')))
         h4 = ops.linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h3_lin')
 
         return tf.nn.sigmoid(h4), h4
@@ -312,7 +347,7 @@ class DCGAN(object):
         self.h0 = tf.reshape(self.z_, [-1, s16, s16, t16, self.gf_dim * 8])
         h0 = tf.nn.relu(self.g_bn0(self.h0))
 
-        self.h1, self.h1_w, self.h1_b = ops.deconv2d(
+        self.h1, self.h1_w, self.h1_b = ops.deconv3d(
             h0, 
             [self.batch_size, s8, s8, t8, self.gf_dim*4],
             name='g_h1',
@@ -320,7 +355,7 @@ class DCGAN(object):
         )
         h1 = tf.nn.relu(self.g_bn1(self.h1))
 
-        h2, self.h2_w, self.h2_b = ops.deconv2d(
+        h2, self.h2_w, self.h2_b = ops.deconv3d(
             h1,
             [self.batch_size, s4, s4, t4, self.gf_dim*2],
             name='g_h2',
@@ -328,7 +363,7 @@ class DCGAN(object):
         )
         h2 = tf.nn.relu(self.g_bn2(h2))
 
-        h3, self.h3_w, self.h3_b = ops.deconv2d(
+        h3, self.h3_w, self.h3_b = ops.deconv3d(
             h2,
             [self.batch_size, s2, s2, t2, self.gf_dim*1],
             name='g_h3',
@@ -336,7 +371,7 @@ class DCGAN(object):
         )
         h3 = tf.nn.relu(self.g_bn3(h3))
 
-        h4, self.h4_w, self.h4_b = ops.deconv2d(
+        h4, self.h4_w, self.h4_b = ops.deconv3d(
             h3,
             [self.batch_size, s, s, t, self.c_dim],
             name='g_h4',
@@ -382,28 +417,28 @@ class DCGAN(object):
         )
         h0 = tf.nn.relu(self.g_bn0(h0, train=False))
 
-        h1 = ops.deconv2d(
+        h1 = ops.deconv3d(
             h0,
             [self.batch_size, s8, s8, t8, self.gf_dim*4],
             name='g_h1'
         )
         h1 = tf.nn.relu(self.g_bn1(h1, train=False))
 
-        h2 = ops.deconv2d(
+        h2 = ops.deconv3d(
             h1,
             [self.batch_size, s4, s4, t4, self.gf_dim*2],
             name='g_h2'
         )
         h2 = tf.nn.relu(self.g_bn2(h2, train=False))
 
-        h3 = ops.deconv2d(
+        h3 = ops.deconv3d(
             h2,
             [self.batch_size, s2, s2, t2, self.gf_dim*1],
             name='g_h3'
         )
         h3 = tf.nn.relu(self.g_bn3(h3, train=False))
 
-        h4 = ops.deconv2d(
+        h4 = ops.deconv3d(
             h3,
             [self.batch_size, s, s, t, self.c_dim],
             name='g_h4'
@@ -430,42 +465,42 @@ class DCGAN(object):
 
         #     return tf.nn.sigmoid(deconv2d(h2, [self.batch_size, s, s, self.c_dim], name='g_h3'))
 
-    def load_mnist(self):
-        data_dir = os.path.join("./data", self.dataset_name)
+    # def load_mnist(self):
+    #     data_dir = os.path.join("./data", self.dataset_name)
         
-        fd = open(os.path.join(data_dir,'train-images-idx3-ubyte'))
-        loaded = np.fromfile(file=fd,dtype=np.uint8)
-        trX = loaded[16:].reshape((60000,28,28,1)).astype(np.float)
+    #     fd = open(os.path.join(data_dir,'train-images-idx3-ubyte'))
+    #     loaded = np.fromfile(file=fd,dtype=np.uint8)
+    #     trX = loaded[16:].reshape((60000,28,28,1)).astype(np.float)
 
-        fd = open(os.path.join(data_dir,'train-labels-idx1-ubyte'))
-        loaded = np.fromfile(file=fd,dtype=np.uint8)
-        trY = loaded[8:].reshape((60000)).astype(np.float)
+    #     fd = open(os.path.join(data_dir,'train-labels-idx1-ubyte'))
+    #     loaded = np.fromfile(file=fd,dtype=np.uint8)
+    #     trY = loaded[8:].reshape((60000)).astype(np.float)
 
-        fd = open(os.path.join(data_dir,'t10k-images-idx3-ubyte'))
-        loaded = np.fromfile(file=fd,dtype=np.uint8)
-        teX = loaded[16:].reshape((10000,28,28,1)).astype(np.float)
+    #     fd = open(os.path.join(data_dir,'t10k-images-idx3-ubyte'))
+    #     loaded = np.fromfile(file=fd,dtype=np.uint8)
+    #     teX = loaded[16:].reshape((10000,28,28,1)).astype(np.float)
 
-        fd = open(os.path.join(data_dir,'t10k-labels-idx1-ubyte'))
-        loaded = np.fromfile(file=fd,dtype=np.uint8)
-        teY = loaded[8:].reshape((10000)).astype(np.float)
+    #     fd = open(os.path.join(data_dir,'t10k-labels-idx1-ubyte'))
+    #     loaded = np.fromfile(file=fd,dtype=np.uint8)
+    #     teY = loaded[8:].reshape((10000)).astype(np.float)
 
-        trY = np.asarray(trY)
-        teY = np.asarray(teY)
+    #     trY = np.asarray(trY)
+    #     teY = np.asarray(teY)
         
-        X = np.concatenate((trX, teX), axis=0)
-        y = np.concatenate((trY, teY), axis=0)
+    #     X = np.concatenate((trX, teX), axis=0)
+    #     y = np.concatenate((trY, teY), axis=0)
         
-        seed = 547
-        np.random.seed(seed)
-        np.random.shuffle(X)
-        np.random.seed(seed)
-        np.random.shuffle(y)
+    #     seed = 547
+    #     np.random.seed(seed)
+    #     np.random.shuffle(X)
+    #     np.random.seed(seed)
+    #     np.random.shuffle(y)
         
-        y_vec = np.zeros((len(y), self.y_dim), dtype=np.float)
-        for i, label in enumerate(y):
-            y_vec[i,y[i]] = 1.0
+    #     y_vec = np.zeros((len(y), self.y_dim), dtype=np.float)
+    #     for i, label in enumerate(y):
+    #         y_vec[i,y[i]] = 1.0
         
-        return X/255.,y_vec
+    #     return X/255.,y_vec
             
     def save(self, checkpoint_dir, step):
         model_name = "DCGAN.model"

@@ -7,10 +7,12 @@ import json
 import math
 import random
 
-import cv
+import cv2
+import matplotlib.animation as animation
 import numpy as np
 import pprint
 import scipy.misc
+import subprocess as sp
 from time import gmtime, strftime
 
 
@@ -22,63 +24,111 @@ get_stddev = lambda x, k_h, k_w, k_t: 1/math.sqrt(k_w*k_h*k_t*x.get_shape()[-1])
 def get_image(image_path, image_size, video_duration, is_crop=True,
               resize_w=64, resize_t=16, is_grayscale = False):
     return transform(
-      vidread(image_path, video_duration, is_grayscale),
-      image_size,
-      video_duration,
-      is_crop,
-      resize_w,
-      resize_t
+        vidread(image_path, resize_w, video_duration, is_grayscale),
+        image_size,
+        video_duration,
+        is_crop,
+        resize_w,
+        resize_t
     )
 
 
-def save_images(images, size, image_path):
-    return imsave(inverse_transform(images), size, image_path)
+def save_videos(videos, num_videos, video_path):
+    videos = inverse_transform(videos)
+    # fourcc = cv2.VideoWriter_fourcc(*'H264')
+    for i, video in enumerate(videos):
+#        command = [
+#            'ffmpeg',
+#            '-f', 'rawvideo',
+#            '-vcodec', 'rawvideo',
+#            '-s', '{}x{}'.format(video.shape[0], video.shape[0]), # size of frame
+#            '-pix_fmt', 'rgb24',
+#            '-r', '25', # fps
+#            '-i', '-', # input from pipe
+#            '-an', # no audio
+#            '-vcodec', 'mpeg',
+#            '{0}_{1:02d}.mp4'.format(video_path, i)
+#        ]
+        out = cv2.VideoWriter(
+            '{0}_{1:02d}.mp4'.format(video_path, i),
+            0x20,
+            25.0,
+            (video.shape[0], video.shape[0])
+        )
+        for j in range(video.shape[2]):
+            frame = np.uint8(255 * video[:,:,j,:])
+            out.write(frame)
+        out.release()
+        # print ' '.join(command)
+#        f = open('a.txt', 'w')
+#        f.write(video.tostring())
+#        f.close()
+#        pipe = sp.Popen(
+#            command,
+#            stdin=sp.PIPE,
+#            stderr=sp.PIPE,
+#            shell=True,
+#            bufsize=10**8
+#        )
+#        pipe.stdin.write(video.tostring())
 
 
-def vidread(path, num_frames, is_grayscale = False):
+def vidread(path, resize_w, num_frames, is_grayscale = False):
     # if (is_grayscale):
     #     return scipy.misc.imread(path, flatten = True).astype(np.float)
     # else:
         # return scipy.misc.imread(path).astype(np.float)
-    capture = cv.CaptureFromFile(path)
+    video = np.empty([num_frames, resize_w, resize_w, 3])
 
-    video = np.empty([num_frames, None, None, 3])
+    cap = cv2.VideoCapture(path)
 
-    for i in range(num_frames):
-        img = cv.QueryFrame(capture)
-        tmp = cv.CreateImage(cv.GetSize(img), 8, 3)
-        cv.CvtColor(img, tmp, cv.CV_BGR2RGB)
-        frame = np.asarray(cv.GetMat(tmp))
-        video[i] = frame
+    i = 0
+    while(cap.isOpened() and i < num_frames):
+        ret, frame = cap.read()
+        if ret==True:
+            frame = cv2.resize(
+                frame, (resize_w, resize_w), interpolation=cv2.INTER_CUBIC
+            )
+            video[i] = frame
+            i += 1
+            # cv2.imshow('frame',frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        else:
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+    capture = cv2.VideoCapture(path)
+    
     # Want [t, w, h, c] -> [w, h, t, c]
-    np.swapaxes(video, 0, 2) # [t, w, h, c] -> [h, w, t, c]
-    np.swapaxes(video, 0, 1) # [h, w, t, c] -> [w, h, t, c]
+    video = np.swapaxes(video, 0, 2) # [t, w, h, c] -> [h, w, t, c]
+    video = np.swapaxes(video, 0, 1) # [h, w, t, c] -> [w, h, t, c]
     return video
 
 
-def merge_images(images, size):
-    return inverse_transform(images)
+# def merge(videos, size):
+#     h, w = images.shape[1], images.shape[2]
+#     img = np.zeros((h * size[0], w * size[1], 3))
+#     for idx, image in enumerate(images):
+#         i = idx % size[1]
+#         j = idx // size[1]
+#         img[j*h:j*h+h, i*w:i*w+w, :] = image
+
+#     return img
 
 
-def merge(images, size):
-    h, w = images.shape[1], images.shape[2]
-    img = np.zeros((h * size[0], w * size[1], 3))
-    for idx, image in enumerate(images):
-        i = idx % size[1]
-        j = idx // size[1]
-        img[j*h:j*h+h, i*w:i*w+w, :] = image
-
-    return img
-
-
-def imsave(images, size, path):
-    return scipy.misc.imsave(path, merge(images, size))
+# def vidsave(videos, size, path):
+#     return scipy.misc.imsave(path, merge(images, size))
 
 
 def center_crop(x, crop_h, crop_t, crop_w=None, resize_w=64, resize_t=16):
     if crop_w is None:
         crop_w = crop_h
     h, w, t = x.shape[:2]
+    print x.shape
+    raise Exception('hi')
     i = int(round((h - crop_h)/2.))
     j = int(round((w - crop_w)/2.))
     k = int(round((t - crop_t)/2.))
@@ -87,7 +137,7 @@ def center_crop(x, crop_h, crop_t, crop_w=None, resize_w=64, resize_t=16):
     )
 
 
-def transform(video, npx=64, nf=16, is_crop=True, resize_w=64):
+def transform(video, npx=64, nf=16, is_crop=True, resize_w=64, resize_t=16):
     # npx : # of pixels width/height of image
     # nf: # of frames of video
     if is_crop:
@@ -99,8 +149,8 @@ def transform(video, npx=64, nf=16, is_crop=True, resize_w=64):
     return np.array(cropped_video)/127.5 - 1.
 
 
-def inverse_transform(images):
-    return (images+1.)/2.
+def inverse_transform(videos):
+    return (videos+1.)/2.
 
 
 def to_json(output_path, *layers):

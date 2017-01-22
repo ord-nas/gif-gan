@@ -55,17 +55,17 @@ def main(_):
         else:
             dcgan.load(FLAGS.checkpoint_dir)
 
-        if FLAGS.visualize:
-            # TODO: jonathan change these once architecture is finalized
-            # utils.to_json("./web/js/layers.js", [dcgan.h0_w, dcgan.h0_b, dcgan.g_bn0],
-            #                               [dcgan.h1_w, dcgan.h1_b, dcgan.g_bn1],
-            #                               [dcgan.h2_w, dcgan.h2_b, dcgan.g_bn2],
-            #                               [dcgan.h3_w, dcgan.h3_b, dcgan.g_bn3],
-            #                               [dcgan.h4_w, dcgan.h4_b, None])
+        # if FLAGS.visualize:
+        #     # TODO: jonathan change these once architecture is finalized
+        #     # utils.to_json("./web/js/layers.js", [dcgan.h0_w, dcgan.h0_b, dcgan.g_bn0],
+        #     #                               [dcgan.h1_w, dcgan.h1_b, dcgan.g_bn1],
+        #     #                               [dcgan.h2_w, dcgan.h2_b, dcgan.g_bn2],
+        #     #                               [dcgan.h3_w, dcgan.h3_b, dcgan.g_bn3],
+        #     #                               [dcgan.h4_w, dcgan.h4_b, None])
 
-            # Below is codes for visualization
-            OPTION = 2
-            utils.visualize(sess, dcgan, FLAGS, OPTION)
+        #     # Below is codes for visualization
+        #     OPTION = 2
+        #     utils.visualize(sess, dcgan, FLAGS, OPTION)
 
 if __name__ == '__main__':
     tf.app.run()
