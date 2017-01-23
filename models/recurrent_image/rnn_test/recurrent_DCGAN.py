@@ -11,11 +11,11 @@ import random
 input_path = "/media/charles/850EVO/ubuntu_documents/ece496/gif-gan/data_collection/data/processed/"
 saved_sample_path = "io_tests/test_output"
 checkpoint_path = "model_checkpoints"
-load = False
+load = True
 quick_test = False
 
 num_epochs = 100
-batch_size = 16
+batch_size = 32
 video_length = 16
 
 output_channels = 3
@@ -82,17 +82,18 @@ def plot_loss(loss_list):
 
 def save_checkpoint(checkpoint_dir):
     global saver
-    global epoch_idx
+    global first_time
 
     model_name = "recurrent.model"
     checkpoint_dir = os.path.join(checkpoint_dir, model_dir)
 
     if os.path.exists(checkpoint_dir):
-        if epoch_idx == 0 and (not load):
+        if first_time and (not load):
             sys.exit("Model checkpoint already exists. Exit...")
     else:
         os.makedirs(checkpoint_dir)
 
+    first_time = False
     saver.save(sess, os.path.join(checkpoint_dir, model_name))
 
 def load_checkpoint(checkpoint_dir):
@@ -149,8 +150,9 @@ with tf.variable_scope("generator") as vs_g:
         for i in range(4):
             input_conv = tf.nn.conv2d(data_in, conv_f_list[i], [1,stride,stride,1], "SAME")
             # mean, variance = tf.nn.moments(input_conv, axes = [0, 1, 2])
-            batch_norm = tf.contrib.layers.batch_norm(input_conv, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
-            data_in = lrelu(batch_norm)
+            # batch_norm = tf.nn.batch_normalization(input_conv, mean, variance, None, None, 1e-5)
+            # batch_norm = tf.contrib.layers.batch_norm(input_conv, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
+            data_in = tf.nn.relu(input_conv)
 
         # skip fc layer (already in RNN cell)
         inputs_series.append(tf.reshape(data_in, [batch_size, fc_size]))
@@ -177,8 +179,9 @@ with tf.variable_scope("generator") as vs_g:
         # deconv, norm, relu layers
         for i in range(4):
             mean, variance = tf.nn.moments(data_in, axes = [0, 1, 2])
-            batch_norm = tf.contrib.layers.batch_norm(data_in, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
-            relu = lrelu(batch_norm)
+            batch_norm = tf.nn.batch_normalization(data_in, mean, variance, None, None, 1e-5)
+            # batch_norm = tf.contrib.layers.batch_norm(data_in, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
+            relu = tf.nn.relu(batch_norm)
             data_in = tf.nn.conv2d_transpose(relu, deconv_f_list[i], layer_shapes[i+1], [1,stride,stride,1], "SAME")
             
         generator_outputs_series.append((tf.tanh(data_in) + 1) / 2)
@@ -211,7 +214,8 @@ with tf.variable_scope("discriminator") as vs_d:
         for i in range(4):
             conv = tf.nn.conv2d(data_in, d_conv_f_list[i], [1,stride,stride,1], "SAME")
             mean, variance = tf.nn.moments(conv, axes = [0, 1, 2])
-            batch_norm = tf.contrib.layers.batch_norm(conv, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
+            batch_norm = tf.nn.batch_normalization(conv, mean, variance, None, None, 1e-5)
+            # batch_norm = tf.contrib.layers.batch_norm(conv, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
             data_in = lrelu(batch_norm)
         
         # fc layer
@@ -230,7 +234,8 @@ with tf.variable_scope("discriminator") as vs_d:
         for i in range(4):
             conv = tf.nn.conv2d(data_in, d_conv_f_list[i], [1,stride,stride,1], "SAME")
             mean, variance = tf.nn.moments(conv, axes = [0, 1, 2])
-            batch_norm = tf.contrib.layers.batch_norm(conv, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
+            batch_norm = tf.nn.batch_normalization(conv, mean, variance, None, None, 1e-5)
+            # batch_norm = tf.contrib.layers.batch_norm(conv, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
             data_in = lrelu(batch_norm)
         
         # fc layer
@@ -287,6 +292,7 @@ with tf.Session() as sess:
             sys.exit("Checkpoint loading failed. Exit...")
 
     step_counter = 1
+    first_time = True
 
     for epoch_idx in range(num_epochs):
         random.shuffle(samples_path_list_full)
@@ -314,7 +320,7 @@ with tf.Session() as sess:
                     hidden_state: _current_hidden_state
                 })
 
-            # Update Generator again (according to DCGAN code, this avoids d_loss going to zero, I don't know why)
+            # Update Generator again and collect some data
             _d_loss, _g_loss, _g_optim, _generator_outputs_series, _d_score_real_input, _d_score_fake_input = sess.run(
                 [d_loss, g_loss, g_optim, generator_outputs_series, d_score_real_input, d_score_fake_input],
                 feed_dict={
