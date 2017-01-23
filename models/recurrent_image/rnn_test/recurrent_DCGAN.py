@@ -6,6 +6,7 @@ from glob import glob
 import os
 import sys
 import cv2
+import random
 
 input_path = "/media/charles/850EVO/ubuntu_documents/ece496/gif-gan/data_collection/data/processed/"
 saved_sample_path = "io_tests/test_output"
@@ -13,13 +14,9 @@ checkpoint_path = "model_checkpoints"
 load = False
 quick_test = False
 
-video_length = 16
-enable_relu = True
-enable_bn = True
-
 num_epochs = 100
-batch_size = 48
-num_classes = 4
+batch_size = 16
+video_length = 16
 
 output_channels = 3
 image_dimension = 64
@@ -112,6 +109,9 @@ def load_checkpoint(checkpoint_dir):
     else:
         return False
 
+def lrelu(x, leak=0.2):
+    return tf.maximum(x, leak*x)
+
 ################################################ main ################################################
 
 # Input
@@ -148,9 +148,9 @@ with tf.variable_scope("generator") as vs_g:
         # conv, norm, relu layers
         for i in range(4):
             input_conv = tf.nn.conv2d(data_in, conv_f_list[i], [1,stride,stride,1], "SAME")
-            mean, variance = tf.nn.moments(input_conv, axes = [0, 1, 2])
-            batch_norm = tf.nn.batch_normalization(input_conv, mean, variance, None, None, 1e-5)
-            data_in = tf.nn.relu(batch_norm)
+            # mean, variance = tf.nn.moments(input_conv, axes = [0, 1, 2])
+            batch_norm = tf.contrib.layers.batch_norm(input_conv, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
+            data_in = lrelu(batch_norm)
 
         # skip fc layer (already in RNN cell)
         inputs_series.append(tf.reshape(data_in, [batch_size, fc_size]))
@@ -177,8 +177,8 @@ with tf.variable_scope("generator") as vs_g:
         # deconv, norm, relu layers
         for i in range(4):
             mean, variance = tf.nn.moments(data_in, axes = [0, 1, 2])
-            batch_norm = tf.nn.batch_normalization(data_in, mean, variance, None, None, 1e-5)
-            relu = tf.nn.relu(batch_norm)
+            batch_norm = tf.contrib.layers.batch_norm(data_in, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
+            relu = lrelu(batch_norm)
             data_in = tf.nn.conv2d_transpose(relu, deconv_f_list[i], layer_shapes[i+1], [1,stride,stride,1], "SAME")
             
         generator_outputs_series.append((tf.tanh(data_in) + 1) / 2)
@@ -189,7 +189,7 @@ with tf.variable_scope("generator") as vs_g:
 
 # Discriminator
 # Takes generator_outputs_series and labels_series
-# Produces d_score_fake_input and d_score_real_input
+# Produces d_score_fake_input_logits and d_score_real_input_logits
 with tf.variable_scope("discriminator") as vs_d:
 
     # Filters for conv layers
@@ -211,8 +211,8 @@ with tf.variable_scope("discriminator") as vs_d:
         for i in range(4):
             conv = tf.nn.conv2d(data_in, d_conv_f_list[i], [1,stride,stride,1], "SAME")
             mean, variance = tf.nn.moments(conv, axes = [0, 1, 2])
-            batch_norm = tf.nn.batch_normalization(conv, mean, variance, None, None, 1e-5)
-            data_in = tf.nn.relu(batch_norm)
+            batch_norm = tf.contrib.layers.batch_norm(conv, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
+            data_in = lrelu(batch_norm)
         
         # fc layer
         discriminator_outputs_series.append(tf.matmul(tf.reshape(data_in, [batch_size, fc_size]), d_fc_w) + d_fc_bias)
@@ -230,8 +230,8 @@ with tf.variable_scope("discriminator") as vs_d:
         for i in range(4):
             conv = tf.nn.conv2d(data_in, d_conv_f_list[i], [1,stride,stride,1], "SAME")
             mean, variance = tf.nn.moments(conv, axes = [0, 1, 2])
-            batch_norm = tf.nn.batch_normalization(conv, mean, variance, None, None, 1e-5)
-            data_in = tf.nn.relu(batch_norm)
+            batch_norm = tf.contrib.layers.batch_norm(conv, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
+            data_in = lrelu(batch_norm)
         
         # fc layer
         discriminator_outputs_series.append(tf.matmul(tf.reshape(data_in, [batch_size, fc_size]), d_fc_w) + d_fc_bias)
@@ -286,8 +286,10 @@ with tf.Session() as sess:
         else:
             sys.exit("Checkpoint loading failed. Exit...")
 
+    step_counter = 1
 
     for epoch_idx in range(num_epochs):
+        random.shuffle(samples_path_list_full)
         samples_path_list = samples_path_list_full[:]
         _current_cell_state = np.zeros((batch_size, state_size))
         _current_hidden_state = np.zeros((batch_size, state_size))
@@ -297,8 +299,7 @@ with tf.Session() as sess:
             batchX = load_batch().astype(np.float32)
 
             # Update Discriminator
-            _d_loss, _d_optim, _d_score_real_input, _d_score_fake_input = sess.run(
-                [d_loss, d_optim, d_score_real_input, d_score_fake_input],
+            _d_optim = sess.run([d_optim],
                 feed_dict={
                     batchINPUT_placeholder: batchX,
                     cell_state: _current_cell_state,
@@ -314,8 +315,8 @@ with tf.Session() as sess:
                 })
 
             # Update Generator again (according to DCGAN code, this avoids d_loss going to zero, I don't know why)
-            _g_loss, _g_optim, _generator_outputs_series = sess.run(
-                [g_loss, g_optim, generator_outputs_series],
+            _d_loss, _g_loss, _g_optim, _generator_outputs_series, _d_score_real_input, _d_score_fake_input = sess.run(
+                [d_loss, g_loss, g_optim, generator_outputs_series, d_score_real_input, d_score_fake_input],
                 feed_dict={
                     batchINPUT_placeholder: batchX,
                     cell_state: _current_cell_state,
@@ -325,15 +326,19 @@ with tf.Session() as sess:
             # if (not (epoch_idx == 0 and batch_idx < 20)) and (batch_idx % 5 == 0):
             #     loss_list.append(_total_loss)
 
-            if batch_idx % 5 == 0:
-                print("Step", batch_idx, "D_Loss", _d_loss, "G_Loss", _g_loss, "D_Score_R", _d_score_real_input, "D_Score_F", _d_score_fake_input)
+            # print("Epoch", epoch_idx, "Batch", batch_idx, "D_Loss", _d_loss, "G_Loss", _g_loss, "D_Score_R", _d_score_real_input, "D_Score_F", _d_score_fake_input)
+            print("Epoch %d Batch %d: D_Loss %.4f, G_Loss %.4f, Real_Score %.4f, Fake_Score %.4f" % \
+                  (epoch_idx, batch_idx, _d_loss, _g_loss, _d_score_real_input, _d_score_fake_input))
 
             if batch_idx % 20 == 0:
                 # plot_loss(loss_list)
                 save_sample(_generator_outputs_series, epoch_idx, batchX)
 
-        if not quick_test:
-            save_checkpoint(checkpoint_path)
+            if (not quick_test) and (step_counter % 300 == 0):
+                print ("Saving checkpoint to %s" % checkpoint_path)
+                save_checkpoint(checkpoint_path)
+
+            step_counter += 1
 
 # plt.ioff()
 # plt.show()
