@@ -74,9 +74,19 @@ def save_sample(sample, epoch_idx, batchX):
             output_path = os.path.join(saved_sample_path, str(epoch_idx) + "_" + str(im_num) + "_" + str(frame_num) + "_real.jpg")
             cv2.imwrite(output_path, im)
 
-def plot_loss(loss_list):
+def plot_loss(g_loss_list, d_loss_list, real_score_list, fake_score_list):
+    plt.subplot(2,1,1)
     plt.cla()
-    plt.plot(loss_list)
+    plt.plot(g_loss_list, label="G_Loss", linewidth=2)
+    plt.plot(d_loss_list, label="D_Loss", linewidth=2)
+    plt.legend()
+
+    plt.subplot(2,1,2)
+    plt.cla()
+    plt.plot(real_score_list, label="Real_Score", linewidth=2)
+    plt.plot(fake_score_list, label="Fake_Score", linewidth=2)
+    plt.legend()
+    
     plt.draw()
     plt.pause(0.0001)
 
@@ -139,8 +149,6 @@ with tf.variable_scope("generator") as vs_g:
     conv_f3 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[2][3], layer_shapes[1][3])), dtype=tf.float32)
     conv_f4 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[1][3], layer_shapes[0][3])), dtype=tf.float32)
     conv_f_list = [conv_f1, conv_f2, conv_f3, conv_f4]
-    # input_fc_w = tf.Variable(np.random.rand(fc_size, state_size),dtype=tf.float32)
-    # input_fc_bias = tf.Variable(np.random.rand(1, state_size),dtype=tf.float32)
 
     # Input-to-RNN
     inputs_series = []
@@ -195,7 +203,7 @@ with tf.variable_scope("generator") as vs_g:
 # Produces d_score_fake_input_logits and d_score_real_input_logits
 with tf.variable_scope("discriminator") as vs_d:
 
-    # Filters for conv layers
+    # Filters for conv and fc layers
     d_conv_f1 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[4][3], layer_shapes[3][3])), dtype=tf.float32)
     d_conv_f2 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[3][3], layer_shapes[2][3])), dtype=tf.float32)
     d_conv_f3 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[2][3], layer_shapes[1][3])), dtype=tf.float32)
@@ -261,15 +269,18 @@ saver = tf.train.Saver()
 
 
 # Train
-g_optim = tf.train.AdamOptimizer(0.0002).minimize(g_loss, var_list=generator_variables)
+g_optim = tf.train.AdamOptimizer(0.0002).minimize(g_loss, var_list=generator_variables) 
 d_optim = tf.train.AdamOptimizer(0.0002).minimize(d_loss, var_list=discriminator_variables)
 
 with tf.Session() as sess:
     sess.run(tf.initialize_all_variables())
-    # plt.ion()
-    # plt.figure()
-    # plt.show()
-    # loss_list = []
+    plt.ion()
+    plt.figure()
+    plt.show()
+    g_loss_list = []
+    d_loss_list = []
+    real_score_list = []
+    fake_score_list = []
 
     # data preparation
     samples_path_list_full = []
@@ -312,7 +323,7 @@ with tf.Session() as sess:
                     hidden_state: _current_hidden_state
                 })
 
-            # Update Generator
+            # Update Generator w.r.t. g_loss
             _g_optim = sess.run([g_optim],
                 feed_dict={
                     batchINPUT_placeholder: batchX,
@@ -320,7 +331,7 @@ with tf.Session() as sess:
                     hidden_state: _current_hidden_state
                 })
 
-            # Update Generator again and collect some data
+            # Update Generator w.r.t. g_loss again and collect some data
             _d_loss, _g_loss, _g_optim, _generator_outputs_series, _d_score_real_input, _d_score_fake_input = sess.run(
                 [d_loss, g_loss, g_optim, generator_outputs_series, d_score_real_input, d_score_fake_input],
                 feed_dict={
@@ -329,15 +340,17 @@ with tf.Session() as sess:
                     hidden_state: _current_hidden_state
                 })
 
-            # if (not (epoch_idx == 0 and batch_idx < 20)) and (batch_idx % 5 == 0):
-            #     loss_list.append(_total_loss)
+            g_loss_list.append(_g_loss)
+            d_loss_list.append(_d_loss)
+            real_score_list.append(_d_score_real_input)
+            fake_score_list.append(_d_score_fake_input)
+            plot_loss(g_loss_list, d_loss_list, real_score_list, fake_score_list)
 
             # print("Epoch", epoch_idx, "Batch", batch_idx, "D_Loss", _d_loss, "G_Loss", _g_loss, "D_Score_R", _d_score_real_input, "D_Score_F", _d_score_fake_input)
             print("Epoch %d Batch %d: D_Loss %.4f, G_Loss %.4f, Real_Score %.4f, Fake_Score %.4f" % \
                   (epoch_idx, batch_idx, _d_loss, _g_loss, _d_score_real_input, _d_score_fake_input))
 
             if batch_idx % 20 == 0:
-                # plot_loss(loss_list)
                 save_sample(_generator_outputs_series, epoch_idx, batchX)
 
             if (not quick_test) and (step_counter % 300 == 0):
@@ -346,7 +359,7 @@ with tf.Session() as sess:
 
             step_counter += 1
 
-# plt.ioff()
-# plt.show()
+plt.ioff()
+plt.show()
 
 ############################################## end main ##############################################
