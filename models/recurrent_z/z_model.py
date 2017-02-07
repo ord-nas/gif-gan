@@ -126,14 +126,14 @@ class VID_DCGAN(object):
         print "DISTANCE:", distance.get_shape().as_list()
         self.loss = tf.reduce_mean(distance)
         print "LOSS:", self.loss.get_shape().as_list()
-        self.per_video_loss = tf.reduce_mean(tf.reshape(distance, [self.sample_rows,
-                                                                   self.sample_cols,
-                                                                   self.vid_length]),
-                                             reduction_indices=[0,2])
-        self.sanity_check_loss = tf.reduce_mean(tf.reshape(distance, [self.sample_rows,
-                                                                      self.sample_cols,
-                                                                      self.vid_length]),
-                                                reduction_indices=[2])
+        self.per_video_loss = tf.reduce_mean(tf.reshape(distance,
+                                                        [self.sample_rows * self.sample_cols,
+                                                         self.vid_length]),
+                                             reduction_indices=[1])
+        self.sanity_check_loss = tf.reduce_mean(tf.reshape(distance,
+                                                           [self.sample_rows * self.sample_cols,
+                                                            self.vid_length]),
+                                                reduction_indices=[1])
 
     def load_image_gan(self, sess, checkpoint_dir):
         print "Loading checkpoints from", checkpoint_dir
@@ -156,8 +156,8 @@ class VID_DCGAN(object):
         
     def train(self, sess, config):
         # Load the target video
-        videos = np.zeros(shape=(self.sample_cols * self.vid_length, self.input_image_size, self.input_image_size, self.c_dim))
-        assert self.sample_cols == len(config.target_video)
+        videos = np.zeros(shape=(self.sample_rows * self.sample_cols * self.vid_length, self.input_image_size, self.input_image_size, self.c_dim))
+        assert (self.sample_rows * self.sample_cols) == len(config.target_video)
         for (i, filename) in enumerate(config.target_video):
             cap = cv2.VideoCapture(filename)
             frame = 0
@@ -173,7 +173,7 @@ class VID_DCGAN(object):
                 videos[i*self.vid_length+frame,:,:,:] = im
                 frame += 1
             assert frame == self.vid_length
-        video_batch = np.concatenate([videos] * self.sample_rows)
+        video_batch = videos
 
         # Trying to write out what we read in just to avoid stupid mistakes
         self.output_video_batch(video_batch, "OUTPUT_VIDEO_BATCH.mp4")
@@ -196,6 +196,10 @@ class VID_DCGAN(object):
                                            scope=current_scope_name)
             sess.run(tf.variables_initializer(scope_vars))
 
+        # Initialize a save
+        saver = tf.train.Saver()
+        writer = tf.summar.FileWriter(config.log_dir, sess.graph)
+
         # Main train loop
         for epoch in xrange(config.epoch):
             _, loss_value, pv_loss, sanity_loss =sess.run(
@@ -211,6 +215,10 @@ class VID_DCGAN(object):
                 self.dump_sample(sess, config, epoch, 0, is_training=False)
                 print "Sanity check loss:"
                 print sanity_loss
+                saver.save(sess,
+                           os.path.join(config.video_checkpoint_dir,
+                                        "VID_DCGAN.model"),
+                           global_step=epoch)
 
     def dump_sample(self, sess, config, epoch, idx, is_training=False):
         sz = self.output_image_size
