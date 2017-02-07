@@ -12,12 +12,14 @@ import random
 input_path = "/thesis0/yccggrp/dataset/face_mp4s/"
 saved_sample_path = "io_tests/test_output"
 checkpoint_path = "model_checkpoints"
-load = True
+load = False
 quick_test = False
 
 num_epochs = 100
 batch_size = 40
 video_length = 16
+
+num_layers = 3
 
 output_channels = 3
 image_dimension = 64
@@ -36,7 +38,7 @@ fc_size = layer_shapes[0][1] * layer_shapes[0][2] * layer_shapes[0][3]
 
 state_size = 100
 stddev = 0.02
-model_dir = "%s_%s" % (batch_size, image_dimension)
+model_dir = "%s_%s_multi-layer" % (batch_size, image_dimension)
 
 def make_gif(images, fname, duration=2):
   import moviepy.editor as mpy
@@ -166,9 +168,13 @@ labels_series = tf.unpack(batchY_placeholder/256, axis=1)
 # Produces generator_outputs_series
 with tf.variable_scope("generator") as vs_g:
     # RNN states
-    cell_state = tf.placeholder(tf.float32, [batch_size, state_size])
-    hidden_state = tf.placeholder(tf.float32, [batch_size, state_size])
-    init_state = tf.nn.rnn_cell.LSTMStateTuple(cell_state, hidden_state)
+    init_state = tf.placeholder(tf.float32, [num_layers, 2, batch_size, state_size])
+
+    state_per_layer_list = tf.unpack(init_state, axis=0)
+    rnn_tuple_state = tuple(
+        [tf.nn.rnn_cell.LSTMStateTuple(state_per_layer_list[idx][0], state_per_layer_list[idx][1])
+         for idx in range(num_layers)]
+    )
 
     # Filters for input-to-RNN
     conv_f1 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[4][3], layer_shapes[3][3])), dtype=tf.float32)
@@ -194,7 +200,8 @@ with tf.variable_scope("generator") as vs_g:
 
     # RNN cell
     cell = tf.nn.rnn_cell.BasicLSTMCell(state_size, state_is_tuple=True)
-    states_series, current_state = tf.nn.rnn(cell, inputs_series, init_state)
+    cell = tf.nn.rnn_cell.MultiRNNCell([cell] * num_layers, state_is_tuple=True)
+    states_series, current_state = tf.nn.rnn(cell, inputs_series, initial_state=rnn_tuple_state)
 
     # Filters for states-to-output
     output_fc_w = tf.Variable(np.random.normal(scale=stddev, size=(state_size, fc_size)), dtype=tf.float32)
@@ -339,8 +346,7 @@ with tf.Session() as sess:
     for epoch_idx in range(num_epochs):
         random.shuffle(samples_path_list_full)
         samples_path_list = samples_path_list_full[:]
-        _current_cell_state = np.zeros((batch_size, state_size))
-        _current_hidden_state = np.zeros((batch_size, state_size))
+        _current_state = np.zeros((num_layers, 2, batch_size, state_size))
 
         print("New epoch", epoch_idx)
         for batch_idx in range(num_batches):
@@ -350,16 +356,14 @@ with tf.Session() as sess:
             _d_optim = sess.run([d_optim],
                 feed_dict={
                     batchINPUT_placeholder: batchX,
-                    cell_state: _current_cell_state,
-                    hidden_state: _current_hidden_state
+                    init_state: _current_state
                 })
 
             # Update Generator w.r.t. g_loss
             _g_optim = sess.run([g_optim],
                 feed_dict={
                     batchINPUT_placeholder: batchX,
-                    cell_state: _current_cell_state,
-                    hidden_state: _current_hidden_state
+                    init_state: _current_state
                 })
 
             # Update Generator w.r.t. g_loss again and collect some data
@@ -367,8 +371,7 @@ with tf.Session() as sess:
                 [d_loss, g_loss, g_optim, generator_outputs_series, d_score_real_input, d_score_fake_input],
                 feed_dict={
                     batchINPUT_placeholder: batchX,
-                    cell_state: _current_cell_state,
-                    hidden_state: _current_hidden_state
+                    init_state: _current_state
                 })
 
             g_loss_list.append(_g_loss)
