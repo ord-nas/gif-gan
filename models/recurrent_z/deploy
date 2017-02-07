@@ -2,4 +2,5 @@
 
 # Copy all of the python files in the current directory into the given directory
 
+rm "$1"/*
 cp *.py "$1"
