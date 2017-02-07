@@ -10,9 +10,9 @@ import random
 
 # input_path = "/media/charles/850EVO/ubuntu_documents/ece496/gif-gan/data_collection/data/processed/"
 input_path = "/thesis0/yccggrp/dataset/face_mp4s/"
-saved_sample_path = "io_tests/test_output"
+saved_sample_path = "io_tests/test_output_multi-layer/"
 checkpoint_path = "model_checkpoints"
-load = False
+load = True
 quick_test = False
 
 num_epochs = 100

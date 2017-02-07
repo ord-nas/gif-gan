@@ -10,7 +10,7 @@ import random
 
 # input_path = "/media/charles/850EVO/ubuntu_documents/ece496/gif-gan/data_collection/data/processed/"
 input_path = "/thesis0/yccggrp/dataset/face_mp4s/"
-saved_sample_path = "io_tests/test_output"
+saved_sample_path = "io_tests/test_output_multi-layer_shared_conv_with_drop_out/"
 checkpoint_path = "model_checkpoints"
 load = False
 quick_test = False
