@@ -64,15 +64,17 @@ class VID_DCGAN(object):
         self.sample_cols = sample_cols
 
         # Batch norm layers
-        self.g_bn0 = batch_norm(name='gvideo_bn0')
-        self.g_bn1 = batch_norm(name='gvideo_bn1')
-        self.g_bn2 = batch_norm(name='gvideo_bn2')
-        self.g_bn3 = batch_norm(name='gvideo_bn3')
-        self.d_bn0 = batch_norm(name='dvideo_bn0')
-        self.d_bn1 = batch_norm(name='dvideo_bn1')
-        self.d_bn2 = batch_norm(name='dvideo_bn2')
-        self.d_bn3 = batch_norm(name='dvideo_bn3')
-        self.d_bn4 = batch_norm(name='dvideo_bn4')
+        def dummy(x, *args, **kwargs):
+            return x
+        self.g_bn0 = dummy
+        self.g_bn1 = dummy
+        self.g_bn2 = dummy
+        self.g_bn3 = dummy
+        self.d_bn0 = dummy
+        self.d_bn1 = dummy
+        self.d_bn2 = dummy
+        self.d_bn3 = dummy
+        self.d_bn4 = dummy
 
         # Actually construct the model
         self.build_model(sess)
