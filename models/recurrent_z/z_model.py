@@ -303,9 +303,7 @@ class VID_DCGAN(object):
 
         print "z:", z.get_shape().as_list()
         f = self.z_output_size
-        f, f2, f4, f8, f16 = [int(f*x) for x in np.logspace(math.log10(1),
-                                                            math.log10(2),
-                                                            5)]#[2,4,8,16]]
+        f2, f4, f8, f16 = [int(f*x) for x in [2,4,8,16]]
         s = self.vid_length
         s_power_2 = 1<<(s-1).bit_length()
         s2, s4, s8, s16 = [int(s_power_2/x) for x in [2,4,8,16]]
