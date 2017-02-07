@@ -198,7 +198,7 @@ class VID_DCGAN(object):
 
         # Initialize a save
         saver = tf.train.Saver()
-        writer = tf.summar.FileWriter(config.log_dir, sess.graph)
+        writer = tf.summary.FileWriter(config.log_dir, sess.graph)
 
         # Main train loop
         for epoch in xrange(config.epoch):
