@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+# Copy all of the python files in the current directory into the given directory
+
+cp *.py "$1"
