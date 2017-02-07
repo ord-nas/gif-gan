@@ -10,7 +10,7 @@ import random
 
 # input_path = "/media/charles/850EVO/ubuntu_documents/ece496/gif-gan/data_collection/data/processed/"
 input_path = "/thesis0/yccggrp/dataset/face_mp4s/"
-saved_sample_path = "io_tests/test_output_multi-layer_shared_conv_with_drop_out/"
+saved_sample_path = "io_tests/multi-layer_scdo"
 checkpoint_path = "model_checkpoints"
 load = False
 quick_test = False
@@ -242,7 +242,7 @@ with tf.variable_scope("generator") as vs_g:
             
         generator_outputs_series.append((tf.tanh(data_in) + 1) / 2)
 
-    generator_variables = [v for v in tf.all_variables() if v.name.startswith(vs_g.name)]
+    generator_variables = [v for v in tf.global_variable() if v.name.startswith(vs_g.name)]
     print("G variables:")
     print(generator_variables)
 
@@ -304,7 +304,7 @@ with tf.variable_scope("discriminator") as vs_d:
     d_score_real_input_logits = tf.matmul(concatenated_outputs, d_final_fc_w) + d_final_fc_bias
     d_score_real_input = tf.reduce_mean(tf.sigmoid(d_score_real_input_logits))
 
-    discriminator_variables = [v for v in tf.all_variables() if v.name.startswith(vs_d.name)]
+    discriminator_variables = [v for v in tf.global_variable() if v.name.startswith(vs_d.name)]
     print("D variables:")
     print(discriminator_variables)
 
@@ -325,7 +325,7 @@ g_optim = tf.train.AdamOptimizer(0.0002, beta1=0.5).minimize(g_loss, var_list=ge
 d_optim = tf.train.AdamOptimizer(0.0002, beta1=0.5).minimize(d_loss, var_list=discriminator_variables)
 
 with tf.Session() as sess:
-    sess.run(tf.initialize_all_variables())
+    sess.run(tf.global_variables_initializer())
     # plt.ion()
     # plt.figure()
     # plt.show()
