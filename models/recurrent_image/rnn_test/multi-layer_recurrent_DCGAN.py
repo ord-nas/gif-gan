@@ -80,6 +80,9 @@ def load_batch():
     return x
 
 def save_sample(sample, epoch_idx, batchX):
+    if not os.path.exists(saved_sample_path):
+        os.makedirs(saved_sample_path)
+        
     for im_num in range(batch_size):
         samples = []
         for frame_num in range(1):
@@ -228,7 +231,7 @@ with tf.variable_scope("generator") as vs_g:
             
         generator_outputs_series.append((tf.tanh(data_in) + 1) / 2)
 
-    generator_variables = [v for v in tf.global_variable() if v.name.startswith(vs_g.name)]
+    generator_variables = [v for v in tf.global_variables() if v.name.startswith(vs_g.name)]
     print("G variables:")
     print(generator_variables)
 
@@ -290,7 +293,7 @@ with tf.variable_scope("discriminator") as vs_d:
     d_score_real_input_logits = tf.matmul(concatenated_outputs, d_final_fc_w) + d_final_fc_bias
     d_score_real_input = tf.reduce_mean(tf.sigmoid(d_score_real_input_logits))
 
-    discriminator_variables = [v for v in tf.global_variable() if v.name.startswith(vs_d.name)]
+    discriminator_variables = [v for v in tf.global_variables() if v.name.startswith(vs_d.name)]
     print("D variables:")
     print(discriminator_variables)
 
