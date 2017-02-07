@@ -10,9 +10,9 @@ import random
 
 # input_path = "/media/charles/850EVO/ubuntu_documents/ece496/gif-gan/data_collection/data/processed/"
 input_path = "/thesis0/yccggrp/dataset/face_mp4s/"
-saved_sample_path = "io_tests/test_output_multi-layer/"
+saved_sample_path = "io_tests/test_output_multi-layer_shared_conv_with_drop_out/"
 checkpoint_path = "model_checkpoints"
-load = True
+load = False
 quick_test = False
 
 num_epochs = 100
@@ -38,7 +38,7 @@ fc_size = layer_shapes[0][1] * layer_shapes[0][2] * layer_shapes[0][3]
 
 state_size = 100
 stddev = 0.02
-model_dir = "%s_%s_multi-layer" % (batch_size, image_dimension)
+model_dir = "%s_%s_multi-layer_shared_conv_with_drop_out" % (batch_size, image_dimension)
 
 def make_gif(images, fname, duration=2):
   import moviepy.editor as mpy
@@ -163,6 +163,18 @@ batchY_placeholder = tf.cast(tf.slice(batchINPUT_placeholder, [0,1,0,0,0], [-1,-
 inputs_series_raw = tf.unpack(batchX_placeholder/256, axis=1)
 labels_series = tf.unpack(batchY_placeholder/256, axis=1)
 
+# Forward declaration of discriminator conv filters
+with tf.variable_scope("discriminator"):
+    d_conv_f1 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[4][3], layer_shapes[3][3])), dtype=tf.float32)
+    d_conv_f2 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[3][3], layer_shapes[2][3])), dtype=tf.float32)
+    d_conv_f3 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[2][3], layer_shapes[1][3])), dtype=tf.float32)
+    d_conv_f4 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[1][3], layer_shapes[0][3])), dtype=tf.float32)
+    d_conv_f_list = [d_conv_f1, d_conv_f2, d_conv_f3, d_conv_f4]
+    d_fc_w = tf.Variable(np.random.normal(scale=stddev, size=(fc_size, state_size)), dtype=tf.float32)
+    d_fc_bias = tf.Variable(np.zeros((1, state_size)),dtype=tf.float32)
+    d_final_fc_w = tf.Variable(np.random.normal(scale=stddev, size=(state_size * video_length, 1)), dtype=tf.float32)
+    d_final_fc_bias = tf.Variable(np.zeros((1, 1)),dtype=tf.float32)
+
 # Generator
 # Takes inputs_series_raw and labels_series (training only)
 # Produces generator_outputs_series
@@ -176,12 +188,12 @@ with tf.variable_scope("generator") as vs_g:
          for idx in range(num_layers)]
     )
 
-    # Filters for input-to-RNN
-    conv_f1 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[4][3], layer_shapes[3][3])), dtype=tf.float32)
-    conv_f2 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[3][3], layer_shapes[2][3])), dtype=tf.float32)
-    conv_f3 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[2][3], layer_shapes[1][3])), dtype=tf.float32)
-    conv_f4 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[1][3], layer_shapes[0][3])), dtype=tf.float32)
-    conv_f_list = [conv_f1, conv_f2, conv_f3, conv_f4]
+    # # Filters for input-to-RNN
+    # conv_f1 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[4][3], layer_shapes[3][3])), dtype=tf.float32)
+    # conv_f2 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[3][3], layer_shapes[2][3])), dtype=tf.float32)
+    # conv_f3 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[2][3], layer_shapes[1][3])), dtype=tf.float32)
+    # conv_f4 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[1][3], layer_shapes[0][3])), dtype=tf.float32)
+    # conv_f_list = [conv_f1, conv_f2, conv_f3, conv_f4]
 
     # Input-to-RNN
     inputs_series = []
@@ -189,17 +201,19 @@ with tf.variable_scope("generator") as vs_g:
         data_in = input_layer
         # conv, norm, relu layers
         for i in range(4):
-            input_conv = tf.nn.conv2d(data_in, conv_f_list[i], [1,stride,stride,1], "SAME")
+            input_conv = tf.nn.conv2d(data_in, d_conv_f_list[i], [1,stride,stride,1], "SAME")
             mean, variance = tf.nn.moments(input_conv, axes = [0, 1, 2])
             batch_norm = tf.nn.batch_normalization(input_conv, mean, variance, None, None, 1e-5)
             # batch_norm = tf.contrib.layers.batch_norm(input_conv, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
             data_in = tf.nn.relu(batch_norm)
 
-        # skip fc layer (already in RNN cell)
-        inputs_series.append(tf.reshape(data_in, [batch_size, fc_size]))
+        # fc layer
+        inputs_series.append(tf.matmul(tf.reshape(data_in, [batch_size, fc_size]), d_fc_w) + d_fc_bias)
+        # inputs_series.append(tf.reshape(data_in, [batch_size, fc_size]))
 
     # RNN cell
     cell = tf.nn.rnn_cell.BasicLSTMCell(state_size, state_is_tuple=True)
+    cell = tf.nn.rnn_cell.DropoutWrapper(cell, output_keep_prob=0.8)
     cell = tf.nn.rnn_cell.MultiRNNCell([cell] * num_layers, state_is_tuple=True)
     states_series, current_state = tf.nn.rnn(cell, inputs_series, initial_state=rnn_tuple_state)
 
@@ -240,15 +254,15 @@ with tf.variable_scope("generator") as vs_g:
 with tf.variable_scope("discriminator") as vs_d:
 
     # Filters for conv and fc layers
-    d_conv_f1 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[4][3], layer_shapes[3][3])), dtype=tf.float32)
-    d_conv_f2 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[3][3], layer_shapes[2][3])), dtype=tf.float32)
-    d_conv_f3 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[2][3], layer_shapes[1][3])), dtype=tf.float32)
-    d_conv_f4 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[1][3], layer_shapes[0][3])), dtype=tf.float32)
-    d_conv_f_list = [d_conv_f1, d_conv_f2, d_conv_f3, d_conv_f4]
-    d_fc_w = tf.Variable(np.random.normal(scale=stddev, size=(fc_size, state_size)), dtype=tf.float32)
-    d_fc_bias = tf.Variable(np.zeros((1, state_size)),dtype=tf.float32)
-    d_final_fc_w = tf.Variable(np.random.normal(scale=stddev, size=(state_size * video_length, 1)), dtype=tf.float32)
-    d_final_fc_bias = tf.Variable(np.zeros((1, 1)),dtype=tf.float32)
+    # d_conv_f1 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[4][3], layer_shapes[3][3])), dtype=tf.float32)
+    # d_conv_f2 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[3][3], layer_shapes[2][3])), dtype=tf.float32)
+    # d_conv_f3 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[2][3], layer_shapes[1][3])), dtype=tf.float32)
+    # d_conv_f4 = tf.Variable(np.random.normal(scale=stddev, size=(filter_dimension, filter_dimension, layer_shapes[1][3], layer_shapes[0][3])), dtype=tf.float32)
+    # d_conv_f_list = [d_conv_f1, d_conv_f2, d_conv_f3, d_conv_f4]
+    # d_fc_w = tf.Variable(np.random.normal(scale=stddev, size=(fc_size, state_size)), dtype=tf.float32)
+    # d_fc_bias = tf.Variable(np.zeros((1, state_size)),dtype=tf.float32)
+    # d_final_fc_w = tf.Variable(np.random.normal(scale=stddev, size=(state_size * video_length, 1)), dtype=tf.float32)
+    # d_final_fc_bias = tf.Variable(np.zeros((1, 1)),dtype=tf.float32)
 
     # Process generator outputs (fake input)
     discriminator_outputs_series = []
@@ -260,7 +274,7 @@ with tf.variable_scope("discriminator") as vs_d:
             mean, variance = tf.nn.moments(conv, axes = [0, 1, 2])
             batch_norm = tf.nn.batch_normalization(conv, mean, variance, None, None, 1e-5)
             # batch_norm = tf.contrib.layers.batch_norm(conv, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
-            data_in = lrelu(batch_norm)
+            data_in = tf.nn.relu(batch_norm)
         
         # fc layer
         discriminator_outputs_series.append(tf.matmul(tf.reshape(data_in, [batch_size, fc_size]), d_fc_w) + d_fc_bias)
@@ -280,7 +294,7 @@ with tf.variable_scope("discriminator") as vs_d:
             mean, variance = tf.nn.moments(conv, axes = [0, 1, 2])
             batch_norm = tf.nn.batch_normalization(conv, mean, variance, None, None, 1e-5)
             # batch_norm = tf.contrib.layers.batch_norm(conv, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
-            data_in = lrelu(batch_norm)
+            data_in = tf.nn.relu(batch_norm)
         
         # fc layer
         discriminator_outputs_series.append(tf.matmul(tf.reshape(data_in, [batch_size, fc_size]), d_fc_w) + d_fc_bias)
