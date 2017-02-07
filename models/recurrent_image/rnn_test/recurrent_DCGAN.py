@@ -15,7 +15,7 @@ load = True
 quick_test = False
 
 num_epochs = 100
-batch_size = 32
+batch_size = 40
 video_length = 16
 
 output_channels = 3
@@ -36,6 +36,20 @@ fc_size = layer_shapes[0][1] * layer_shapes[0][2] * layer_shapes[0][3]
 state_size = 100
 stddev = 0.02
 model_dir = "%s_%s" % (batch_size, image_dimension)
+
+def make_gif(images, fname, duration=2):
+  import moviepy.editor as mpy
+
+  def make_frame(t):
+    try:
+      x = images[int(len(images)/duration*t)]
+    except:
+      x = images[-1]
+
+    return x
+
+  clip = mpy.VideoClip(make_frame, duration=duration)
+  clip.write_videofile(fname, fps = len(images)/duration)
 
 def load_batch():
     global samples_path_list
@@ -63,16 +77,28 @@ def load_batch():
     return x
 
 def save_sample(sample, epoch_idx, batchX):
-    for im_num in range(5):
-        for frame_num in range(video_length):
-            im = (np.array(sample)[frame_num][im_num].reshape((image_dimension, image_dimension, output_channels)) * 256).astype(int)
+    for im_num in range(batch_size):
+        samples = []
+        for frame_num in range(1):
+            im = (np.array(sample)[frame_num][im_num].reshape((image_dimension, image_dimension, output_channels)) * 256).astype(np.uint8)
             output_path = os.path.join(saved_sample_path, str(epoch_idx) + "_" + str(im_num) + "_" + str(frame_num) + ".jpg")
-            cv2.imwrite(output_path, im)
+            if frame_num == 0:
+                cv2.imwrite(output_path, im)
+            # samples.append(im)
 
-        for frame_num in range(video_length):
-            im = (batchX[im_num][frame_num]).astype(int)
-            output_path = os.path.join(saved_sample_path, str(epoch_idx) + "_" + str(im_num) + "_" + str(frame_num) + "_real.jpg")
-            cv2.imwrite(output_path, im)
+        # make_gif(samples, "./io_tests/test_output/" + str(epoch_idx) + "_" + str(im_num) + ".mp4", duration=16)
+
+        # real_images = []
+        # for frame_num in range(1):
+        #     im = (batchX[im_num][frame_num]).astype(np.uint8)
+        #     output_path = os.path.join(saved_sample_path, str(epoch_idx) + "_" + str(im_num) + "_" + str(frame_num) + "_real.jpg")
+        #     if frame_num == 0:
+        #         cv2.imwrite(output_path, im)
+            # real_images.append(im)
+
+        # make_gif(real_images, "./io_tests/test_output/" + str(epoch_idx) + "_" + str(im_num) + "_real.mp4", duration=16)
+
+
 
 def plot_loss(g_loss_list, d_loss_list, real_score_list, fake_score_list):
     plt.subplot(2,1,1)
@@ -157,10 +183,10 @@ with tf.variable_scope("generator") as vs_g:
         # conv, norm, relu layers
         for i in range(4):
             input_conv = tf.nn.conv2d(data_in, conv_f_list[i], [1,stride,stride,1], "SAME")
-            # mean, variance = tf.nn.moments(input_conv, axes = [0, 1, 2])
-            # batch_norm = tf.nn.batch_normalization(input_conv, mean, variance, None, None, 1e-5)
+            mean, variance = tf.nn.moments(input_conv, axes = [0, 1, 2])
+            batch_norm = tf.nn.batch_normalization(input_conv, mean, variance, None, None, 1e-5)
             # batch_norm = tf.contrib.layers.batch_norm(input_conv, decay=0.9, updates_collections=None, epsilon=1e-5, scale=True, is_training=True)
-            data_in = tf.nn.relu(input_conv)
+            data_in = tf.nn.relu(batch_norm)
 
         # skip fc layer (already in RNN cell)
         inputs_series.append(tf.reshape(data_in, [batch_size, fc_size]))
@@ -195,6 +221,8 @@ with tf.variable_scope("generator") as vs_g:
         generator_outputs_series.append((tf.tanh(data_in) + 1) / 2)
 
     generator_variables = [v for v in tf.all_variables() if v.name.startswith(vs_g.name)]
+    print("G variables:")
+    print(generator_variables)
 
 
 
@@ -255,6 +283,8 @@ with tf.variable_scope("discriminator") as vs_d:
     d_score_real_input = tf.reduce_mean(tf.sigmoid(d_score_real_input_logits))
 
     discriminator_variables = [v for v in tf.all_variables() if v.name.startswith(vs_d.name)]
+    print("D variables:")
+    print(discriminator_variables)
 
 
 # Loss Functions
@@ -269,8 +299,8 @@ saver = tf.train.Saver()
 
 
 # Train
-g_optim = tf.train.AdamOptimizer(0.0002).minimize(g_loss, var_list=generator_variables) 
-d_optim = tf.train.AdamOptimizer(0.0002).minimize(d_loss, var_list=discriminator_variables)
+g_optim = tf.train.AdamOptimizer(0.0002, beta1=0.5).minimize(g_loss, var_list=generator_variables) 
+d_optim = tf.train.AdamOptimizer(0.0002, beta1=0.5).minimize(d_loss, var_list=discriminator_variables)
 
 with tf.Session() as sess:
     sess.run(tf.initialize_all_variables())
@@ -285,7 +315,7 @@ with tf.Session() as sess:
     # data preparation
     samples_path_list_full = []
 
-    for i in range(36, 48):
+    for i in range(0, 48):
         samples_path_list_full += glob(os.path.join(input_path, str(i), "*.mp4"))
         # print (len(samples_path_list))
     
@@ -350,7 +380,7 @@ with tf.Session() as sess:
             print("Epoch %d Batch %d: D_Loss %.4f, G_Loss %.4f, Real_Score %.4f, Fake_Score %.4f" % \
                   (epoch_idx, batch_idx, _d_loss, _g_loss, _d_score_real_input, _d_score_fake_input))
 
-            if batch_idx % 20 == 0:
+            if (batch_idx % 20) == 0:
                 save_sample(_generator_outputs_series, epoch_idx, batchX)
 
             if (not quick_test) and (step_counter % 300 == 0):
