@@ -2,6 +2,7 @@ import os
 from ops import *
 #import scipy.misc
 import numpy as np
+import sys
 
 from model import DCGAN
 from utils import pp
@@ -359,10 +360,8 @@ class VID_DCGAN(object):
         if reuse:
             tf.get_variable_scope().reuse_variables()
 
-        # First we wanna just project into a reasonable shape.
-        # Squeeze all of the per-frame stuff togther
         print "vid:", vid.get_shape().as_list()
-        vid = tf.reshape(vid, [self.batch_size, 1, self.vid_length, -1])
+        vid = tf.reshape(vid, [self.batch_size, self.vid_length, 8, 8, -1])
         num_filters = vid.get_shape().as_list()[-1]
         print "vid (reshaped):", vid.get_shape().as_list()
 
@@ -381,18 +380,16 @@ class VID_DCGAN(object):
         # print "dr0:", layers.dr0.get_shape().as_list()
 
         layers.dr0 = vid
-        layers.dr1 = lrelu(conv2d(layers.dr0, 512, k_h=1, k_w=k_w, d_h=1, name='dvideo_h1'))
+        layers.dr1 = lrelu(conv3d(layers.dr0, 512, name='dvideo_h1'))
         print "dr1:", layers.dr1.get_shape().as_list()
-        layers.dr2 = lrelu(self.d_bn2(conv2d(layers.dr1, 512, k_h=1, k_w=k_w, d_h=1, name='dvideo_h2')))
+        layers.dr2 = lrelu(self.d_bn2(conv3d(layers.dr1, 512, name='dvideo_h2')))
         print "dr2:", layers.dr2.get_shape().as_list()
-        layers.dr3 = lrelu(self.d_bn3(conv2d(layers.dr2, 512, k_h=1, k_w=k_w, d_h=1, name='dvideo_h3')))
+        layers.dr3 = lrelu(self.d_bn3(conv3d(layers.dr2, 512, name='dvideo_h3')))
         print "dr3:", layers.dr3.get_shape().as_list()
-        layers.dr4 = lrelu(self.d_bn4(conv2d(layers.dr3, 512, k_h=1, k_w=k_w, d_h=1, name='dvideo_h4')))
-        print "dr4:", layers.dr4.get_shape().as_list()
-        layers.d5 = linear(tf.reshape(layers.dr4, [self.batch_size, -1]), 1, 'dvideo_h5')
-        print "d5:", layers.d5.get_shape().as_list()
+        layers.d4 = linear(tf.reshape(layers.dr3, [self.batch_size, -1]), 1, 'dvideo_h4')
+        print "d4:", layers.d4.get_shape().as_list()
 
-        return tf.nn.sigmoid(layers.d5), layers.d5, layers
+        return tf.nn.sigmoid(layers.d4), layers.d4, layers
 
 
 def main(_):
