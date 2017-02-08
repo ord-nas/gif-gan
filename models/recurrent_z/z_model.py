@@ -28,6 +28,7 @@ flags.DEFINE_integer("output_size", 64, "The size of the output images to produc
 flags.DEFINE_integer("c_dim", 3, "Dimension of image color. [3]")
 # flags.DEFINE_string("image_dataset", "celebA", "The name of dataset [celebA, mnist, lsun]")
 flags.DEFINE_string("image_model_dir", "checkpoint", "Directory name to load the image checkpoints [checkpoint]")
+flags.DEFINE_string("generator_model_dir", "", "Directory name to load the video generator checkpoints ['']")
 flags.DEFINE_string("video_checkpoint_dir", "checkpoint", "Directory name to save the video checkpoints [checkpoint]")
 flags.DEFINE_string("video_sample_dir", "samples", "Directory name to save the video samples [samples]")
 flags.DEFINE_string("video_data_dir", "./data", "Directory to read dataset from")
@@ -144,7 +145,19 @@ class VID_DCGAN(object):
             print "Success!"
         else:
             print "FAIL!"
-        
+
+    def load_video_generator(self, sess, checkpoint_dir):
+        print "Loading video generator checkpoints from", checkpoint_dir
+
+        ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+        if ckpt and ckpt.model_checkpoint_path:
+            ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+            saver = tf.train.Saver(var_list=self.g_vid_vars)
+            saver.restore(sess, os.path.join(checkpoint_dir, ckpt_name))
+            print "Success!"
+        else:
+            print "FAIL!"
+
     def train(self, sess, config):
         files = []
         for lst in config.video_list:
@@ -421,6 +434,10 @@ def main(_):
             # Load image model weights. This needs to happen *after* init, so
             # that we don't overwrite the weights we load.
             vid_dcgan.load_image_gan(sess, FLAGS.image_model_dir)
+
+            # Optionally load weigts for the video generator.
+            if FLAGS.generator_model_dir:
+                vid_dcgan.load_video_generator(sess, FLAGS.generator_model_dir)
 
             # Generate some z-vectors for one video.
             sample_z = np.random.uniform(-1, 1, size=(FLAGS.vid_batch_size, vid_z_dim))
