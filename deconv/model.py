@@ -15,7 +15,7 @@ class DCGAN(object):
                  y_dim=None, z_dim=100, gf_dim=64, df_dim=64,
                  gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='default',
                  checkpoint_dir=None, sample_dir=None,
-                 video_duration=16, output_duration=16):
+                 video_duration=32, output_duration=32):
         """
 
         Args:
@@ -42,7 +42,6 @@ class DCGAN(object):
         self.output_size = output_size
         self.output_duration = output_duration
 
-        # self.y_dim = y_dim
         self.z_dim = z_dim
 
         self.gf_dim = gf_dim
@@ -56,15 +55,11 @@ class DCGAN(object):
         # batch normalization : deals with poor initialization helps gradient flow
         self.d_bn1 = ops.batch_norm(name='d_bn1')
         self.d_bn2 = ops.batch_norm(name='d_bn2')
-
-        # if not self.y_dim:
         self.d_bn3 = ops.batch_norm(name='d_bn3')
 
         self.g_bn0 = ops.batch_norm(name='g_bn0')
         self.g_bn1 = ops.batch_norm(name='g_bn1')
         self.g_bn2 = ops.batch_norm(name='g_bn2')
-
-        # if not self.y_dim:
         self.g_bn3 = ops.batch_norm(name='g_bn3')
 
         self.dataset_name = dataset_name
@@ -72,11 +67,6 @@ class DCGAN(object):
         self.build_model()
 
     def build_model(self):
-        # if self.y_dim:
-        #     self.y= tf.placeholder(
-        #         tf.float32, [self.batch_size, self.y_dim], name='y'
-        #     )
-
         self.images = tf.placeholder(
             tf.float32,
             [self.batch_size] + [
@@ -96,17 +86,6 @@ class DCGAN(object):
 
         self.z_sum = tf.histogram_summary("z", self.z)
 
-        # if self.y_dim:
-        #     self.G = self.generator(self.z, self.y)
-        #     self.D, self.D_logits  = self.discriminator(
-        #         self.images, self.y, reuse=False
-        #     )
-
-        #     self.sampler = self.sampler(self.z, self.y)
-        #     self.D_, self.D_logits_ = self.discriminator(
-        #         self.G, self.y, reuse=True
-        #     )
-        # else:
         self.G = self.generator(self.z)
         self.D, self.D_logits = self.discriminator(self.images)
 
@@ -116,15 +95,29 @@ class DCGAN(object):
 
         self.d_sum = tf.histogram_summary("d", self.D)
         self.d__sum = tf.histogram_summary("d_", self.D_)
+        # TODO jonathan: try to find an equivalent for this
         # self.G_sum = tf.image_summary("G", self.G)
 
-        self.d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
-        self.d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
-        self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
+        self.d_loss_real = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                self.D_logits, tf.ones_like(self.D)
+            )
+        )
+        self.d_loss_fake = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                self.D_logits_, tf.zeros_like(self.D_)
+            )
+        )
+        self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+            self.D_logits_, tf.ones_like(self.D_))
+        )
 
-        self.d_loss_real_sum = tf.scalar_summary("d_loss_real", self.d_loss_real)
-        self.d_loss_fake_sum = tf.scalar_summary("d_loss_fake", self.d_loss_fake)
-                                                    
+        self.d_loss_real_sum = tf.scalar_summary(
+            "d_loss_real", self.d_loss_real
+        )
+        self.d_loss_fake_sum = tf.scalar_summary(
+            "d_loss_fake", self.d_loss_fake
+        )
         self.d_loss = self.d_loss_real + self.d_loss_fake
 
         self.g_loss_sum = tf.scalar_summary("g_loss", self.g_loss)
@@ -139,16 +132,15 @@ class DCGAN(object):
 
     def train(self, config):
         """Train DCGAN"""
-        # if config.dataset == 'mnist':
-        #     data_X, data_y = self.load_mnist()
-        # else:
         data = glob(os.path.join("/thesis0/yccggrp/dataset/face_mp4s/*/*.mp4"))
-        #np.random.shuffle(data)
 
-        d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
-                          .minimize(self.d_loss, var_list=self.d_vars)
-        g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
-                          .minimize(self.g_loss, var_list=self.g_vars)
+        d_optim = tf.train.AdamOptimizer(
+            config.learning_rate, beta1=config.beta1
+        ).minimize(self.d_loss, var_list=self.d_vars)
+        g_optim = tf.train.AdamOptimizer(
+            config.learning_rate, beta1=config.beta1
+        ).minimize(self.g_loss, var_list=self.g_vars)
+
         tf.initialize_all_variables().run()
 
         self.g_sum = tf.merge_summary([
@@ -163,13 +155,15 @@ class DCGAN(object):
 
         sample_z = np.random.uniform(-1, 1, size=(self.sample_size , self.z_dim))
         
-        # if config.dataset == 'mnist':
-        #     sample_images = data_X[0:self.sample_size]
-        #     sample_labels = data_y[0:self.sample_size]
-        # else:
-        sample_files = data[0:self.sample_size]
-        sample = [
-            utils.get_image(
+        # No guarantees that they'll all be at least output_duration long, so
+        # take 10x as many just in case, huge hack?
+        sample_files = data[0:self.sample_size*10]
+
+        samples = []
+        i = 0
+        while len(samples) < self.sample_size:
+            sample_file = sample_files[i]
+            sample = utils.get_image(
                 sample_file,
                 self.image_size,
                 self.video_duration,
@@ -177,12 +171,15 @@ class DCGAN(object):
                 resize_w=self.output_size,
                 resize_t=self.output_duration,
                 is_grayscale = self.is_grayscale
-            ) for sample_file in sample_files
-        ]
+            )
+            if sample is not None:
+                samples.append(sample)
+            i += 1
+            
         if (self.is_grayscale):
-            sample_images = np.array(sample).astype(np.float32)[:, :, :, :,None]
+            sample_images = np.array(samples).astype(np.float32)[:, :, :, :,None]
         else:
-            sample_images = np.array(sample).astype(np.float32)
+            sample_images = np.array(samples).astype(np.float32)
             
         counter = 1
         start_time = time.time()
@@ -191,26 +188,24 @@ class DCGAN(object):
             print(" [*] Load SUCCESS")
         else:
             print(" [!] Load failed...")
-        print 'a'
 
         for epoch in xrange(config.epoch):
-            # if config.dataset == 'mnist':
-            #     batch_idxs = min(len(data_X), config.train_size) // config.batch_size
-            # else:            
             data = glob(
                 os.path.join("/thesis0/yccggrp/dataset/face_mp4s/*/*.mp4")
             )
-            print len(data), config.train_size
             batch_idxs = min(len(data), config.train_size) // config.batch_size
 
             for idx in xrange(0, batch_idxs):
-                # if config.dataset == 'mnist':
-                #     batch_images = data_X[idx*config.batch_size:(idx+1)*config.batch_size]
-                #     batch_labels = data_y[idx*config.batch_size:(idx+1)*config.batch_size]
-                # else:
-                batch_files = data[idx*config.batch_size:(idx+1)*config.batch_size]
-                batch = [
-                    utils.get_image(
+                # Same hack as above with sample_files
+                batch_files = data[
+                    idx*config.batch_size:(idx+11)*config.batch_size
+                ]
+
+                batches = []
+                i = 0
+                while len(batches) < config.batch_size:
+                    batch_file = batch_files[i]
+                    batch = utils.get_image(
                         batch_file,
                         self.image_size,
                         self.video_duration,
@@ -218,36 +213,22 @@ class DCGAN(object):
                         resize_w=self.output_size,
                         resize_t=self.output_duration,
                         is_grayscale = self.is_grayscale
-                    ) for batch_file in batch_files
-                ]
+                    )
+                    if batch is not None:
+                        batches.append(batch)
+                    i += 1
+
                 if (self.is_grayscale):
-                    batch_images = np.array(batch).astype(np.float32)[:, :, :,:, None]
+                    batch_images = np.array(batches).astype(np.float32)[
+                        :, :, :,:, None
+                    ]
                 else:
-                    batch_images = np.array(batch).astype(np.float32)
+                    batch_images = np.array(batches).astype(np.float32)
 
-                batch_z = np.random.uniform(-1, 1, [config.batch_size, self.z_dim]) \
-                            .astype(np.float32)
+                batch_z = np.random.uniform(
+                    -1, 1, [config.batch_size, self.z_dim]
+                ).astype(np.float32)
 
-                # if config.dataset == 'mnist':
-                #     # Update D network
-                #     _, summary_str = self.sess.run([d_optim, self.d_sum],
-                #         feed_dict={ self.images: batch_images, self.z: batch_z, self.y:batch_labels })
-                #     self.writer.add_summary(summary_str, counter)
-
-                #     # Update G network
-                #     _, summary_str = self.sess.run([g_optim, self.g_sum],
-                #         feed_dict={ self.z: batch_z, self.y:batch_labels })
-                #     self.writer.add_summary(summary_str, counter)
-
-                #     # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-                #     _, summary_str = self.sess.run([g_optim, self.g_sum],
-                #         feed_dict={ self.z: batch_z, self.y:batch_labels })
-                #     self.writer.add_summary(summary_str, counter)
-                    
-                #     errD_fake = self.d_loss_fake.eval({self.z: batch_z, self.y:batch_labels})
-                #     errD_real = self.d_loss_real.eval({self.images: batch_images, self.y:batch_labels})
-                #     errG = self.g_loss.eval({self.z: batch_z, self.y:batch_labels})
-                # else:
                 # Update D network
                 _, summary_str = self.sess.run(
                     [d_optim, self.d_sum],
@@ -278,23 +259,23 @@ class DCGAN(object):
                     % (epoch, idx, batch_idxs,
                         time.time() - start_time, errD_fake+errD_real, errG))
 
-                if np.mod(counter, 10) == 1:
-                    # if config.dataset == 'mnist':
-                    #     samples, d_loss, g_loss = self.sess.run(
-                    #         [self.sampler, self.d_loss, self.g_loss],
-                    #         feed_dict={self.z: sample_z, self.images: sample_images, self.y:batch_labels}
-                    #     )
-                    # else:
+                if np.mod(counter, 100) == 1:
                     samples, d_loss, g_loss = self.sess.run(
                         [self.sampler, self.d_loss, self.g_loss],
                         feed_dict={self.z: sample_z, self.images: sample_images}
                     )
-
+                    vid_path = './{}/{}'.format(
+                        config.sample_dir, time.strftime("%Y%m%d")
+                    )
+                    if not os.path.exists(vid_path):
+                        os.makedirs(vid_path)
                     utils.save_videos(
                         samples,
-                        8,
-                        './{}/train_{:02d}_{:04d}'.format(
-                            config.sample_dir, epoch, idx
+                        16,
+                        '{}/train_{:02d}_{:04d}'.format(
+                            vid_path,
+                            epoch,
+                            idx
                         )
                     )
                     print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
@@ -306,7 +287,6 @@ class DCGAN(object):
         if reuse:
             tf.get_variable_scope().reuse_variables()
 
-        # if not self.y_dim:
         h0 = ops.lrelu(ops.conv3d(image, self.df_dim, name='d_h0_conv'))
         h1 = ops.lrelu(self.d_bn1(ops.conv3d(h0, self.df_dim*2, name='d_h1_conv')))
         h2 = ops.lrelu(self.d_bn2(ops.conv3d(h1, self.df_dim*4, name='d_h2_conv')))
@@ -314,26 +294,8 @@ class DCGAN(object):
         h4 = ops.linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h3_lin')
 
         return tf.nn.sigmoid(h4), h4
-        # else:
-        #     yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
-        #     x = ops.conv_cond_concat(image, yb)
-
-        #     h0 = lrelu(conv2d(x, self.c_dim + self.y_dim, name='d_h0_conv'))
-        #     h0 = ops.conv_cond_concat(h0, yb)
-
-        #     h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim + self.y_dim, name='d_h1_conv')))
-        #     h1 = tf.reshape(h1, [self.batch_size, -1])            
-        #     h1 = tf.concat(1, [h1, y])
-            
-        #     h2 = lrelu(self.d_bn2(linear(h1, self.dfc_dim, 'd_h2_lin')))
-        #     h2 = tf.concat(1, [h2, y])
-
-        #     h3 = linear(h2, 1, 'd_h3_lin')
-            
-        #     return tf.nn.sigmoid(h3), h3
 
     def generator(self, z, y=None):
-        # if not self.y_dim:
         s = self.output_size
         s2, s4, s8, s16 = int(s/2), int(s/4), int(s/8), int(s/16)
         t = self.output_duration
@@ -379,32 +341,10 @@ class DCGAN(object):
         )
 
         return tf.nn.tanh(h4)
-        # else:
-        #     s = self.output_size
-        #     s2, s4 = int(s/2), int(s/4) 
-
-        #     # yb = tf.expand_dims(tf.expand_dims(y, 1),2)
-        #     yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
-        #     z = tf.concat(1, [z, y])
-
-        #     h0 = tf.nn.relu(self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin')))
-        #     h0 = tf.concat(1, [h0, y])
-
-        #     h1 = tf.nn.relu(self.g_bn1(linear(h0, self.gf_dim*2*s4*s4, 'g_h1_lin')))
-        #     h1 = tf.reshape(h1, [self.batch_size, s4, s4, self.gf_dim * 2])
-
-        #     h1 = ops.conv_cond_concat(h1, yb)
-
-        #     h2 = tf.nn.relu(self.g_bn2(deconv2d(h1, [self.batch_size, s2, s2, self.gf_dim * 2], name='g_h2')))
-        #     h2 = ops.conv_cond_concat(h2, yb)
-
-        #     return tf.nn.sigmoid(deconv2d(h2, [self.batch_size, s, s, self.c_dim], name='g_h3'))
 
     def sampler(self, z, y=None):
         tf.get_variable_scope().reuse_variables()
 
-        # if not self.y_dim:
-            
         s = self.output_size
         s2, s4, s8, s16 = int(s/2), int(s/4), int(s/8), int(s/16)
         t = self.output_duration
@@ -445,66 +385,15 @@ class DCGAN(object):
         )
 
         return tf.nn.tanh(h4)
-        # else:
-        #     s = self.output_size
-        #     s2, s4 = int(s/2), int(s/4)
-
-        #     # yb = tf.reshape(y, [-1, 1, 1, self.y_dim])
-        #     yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
-        #     z = tf.concat(1, [z, y])
-
-        #     h0 = tf.nn.relu(self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin')))
-        #     h0 = tf.concat(1, [h0, y])
-
-        #     h1 = tf.nn.relu(self.g_bn1(linear(h0, self.gf_dim*2*s4*s4, 'g_h1_lin'), train=False))
-        #     h1 = tf.reshape(h1, [self.batch_size, s4, s4, self.gf_dim * 2])
-        #     h1 = ops.conv_cond_concat(h1, yb)
-
-        #     h2 = tf.nn.relu(self.g_bn2(deconv2d(h1, [self.batch_size, s2, s2, self.gf_dim * 2], name='g_h2'), train=False))
-        #     h2 = ops.conv_cond_concat(h2, yb)
-
-        #     return tf.nn.sigmoid(deconv2d(h2, [self.batch_size, s, s, self.c_dim], name='g_h3'))
-
-    # def load_mnist(self):
-    #     data_dir = os.path.join("./data", self.dataset_name)
-        
-    #     fd = open(os.path.join(data_dir,'train-images-idx3-ubyte'))
-    #     loaded = np.fromfile(file=fd,dtype=np.uint8)
-    #     trX = loaded[16:].reshape((60000,28,28,1)).astype(np.float)
-
-    #     fd = open(os.path.join(data_dir,'train-labels-idx1-ubyte'))
-    #     loaded = np.fromfile(file=fd,dtype=np.uint8)
-    #     trY = loaded[8:].reshape((60000)).astype(np.float)
-
-    #     fd = open(os.path.join(data_dir,'t10k-images-idx3-ubyte'))
-    #     loaded = np.fromfile(file=fd,dtype=np.uint8)
-    #     teX = loaded[16:].reshape((10000,28,28,1)).astype(np.float)
-
-    #     fd = open(os.path.join(data_dir,'t10k-labels-idx1-ubyte'))
-    #     loaded = np.fromfile(file=fd,dtype=np.uint8)
-    #     teY = loaded[8:].reshape((10000)).astype(np.float)
-
-    #     trY = np.asarray(trY)
-    #     teY = np.asarray(teY)
-        
-    #     X = np.concatenate((trX, teX), axis=0)
-    #     y = np.concatenate((trY, teY), axis=0)
-        
-    #     seed = 547
-    #     np.random.seed(seed)
-    #     np.random.shuffle(X)
-    #     np.random.seed(seed)
-    #     np.random.shuffle(y)
-        
-    #     y_vec = np.zeros((len(y), self.y_dim), dtype=np.float)
-    #     for i, label in enumerate(y):
-    #         y_vec[i,y[i]] = 1.0
-        
-    #     return X/255.,y_vec
             
     def save(self, checkpoint_dir, step):
         model_name = "DCGAN.model"
-        model_dir = "%s_%s_%s" % (self.dataset_name, self.batch_size, self.output_size)
+        model_dir = "%s_%s_%s_%s" % (
+            self.dataset_name,
+            self.batch_size,
+            self.output_size,
+            self.output_duration
+        )
         checkpoint_dir = os.path.join(checkpoint_dir, model_dir)
 
         if not os.path.exists(checkpoint_dir):
@@ -517,13 +406,20 @@ class DCGAN(object):
     def load(self, checkpoint_dir):
         print(" [*] Reading checkpoints...")
 
-        model_dir = "%s_%s_%s" % (self.dataset_name, self.batch_size, self.output_size)
+        model_dir = "%s_%s_%s_%s" % (
+            self.dataset_name,
+            self.batch_size,
+            self.output_size,
+            self.output_duration
+        )
         checkpoint_dir = os.path.join(checkpoint_dir, model_dir)
 
         ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
             ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-            self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
+            self.saver.restore(self.sess, os.path.join(
+                checkpoint_dir, ckpt_name
+            ))
             return True
         else:
             return False

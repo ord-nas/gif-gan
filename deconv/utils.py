@@ -22,7 +22,7 @@ get_stddev = lambda x, k_h, k_w, k_t: 1/math.sqrt(k_w*k_h*k_t*x.get_shape()[-1])
 
 
 def get_image(image_path, image_size, video_duration, is_crop=True,
-              resize_w=64, resize_t=16, is_grayscale = False):
+              resize_w=64, resize_t=32, is_grayscale = False):
     return transform(
         vidread(image_path, resize_w, video_duration, is_grayscale),
         image_size,
@@ -32,52 +32,31 @@ def get_image(image_path, image_size, video_duration, is_crop=True,
         resize_t
     )
 
-
 def save_videos(videos, num_videos, video_path):
     videos = inverse_transform(videos)
-    # fourcc = cv2.VideoWriter_fourcc(*'H264')
-    for i, video in enumerate(videos):
-#        command = [
-#            'ffmpeg',
-#            '-f', 'rawvideo',
-#            '-vcodec', 'rawvideo',
-#            '-s', '{}x{}'.format(video.shape[0], video.shape[0]), # size of frame
-#            '-pix_fmt', 'rgb24',
-#            '-r', '25', # fps
-#            '-i', '-', # input from pipe
-#            '-an', # no audio
-#            '-vcodec', 'mpeg',
-#            '{0}_{1:02d}.mp4'.format(video_path, i)
-#        ]
-        out = cv2.VideoWriter(
-            '{0}_{1:02d}.mp4'.format(video_path, i),
-            0x20,
-            25.0,
-            (video.shape[0], video.shape[0])
-        )
-        for j in range(video.shape[2]):
-            frame = np.uint8(255 * video[:,:,j,:])
-            out.write(frame)
-        out.release()
-        # print ' '.join(command)
-#        f = open('a.txt', 'w')
-#        f.write(video.tostring())
-#        f.close()
-#        pipe = sp.Popen(
-#            command,
-#            stdin=sp.PIPE,
-#            stderr=sp.PIPE,
-#            shell=True,
-#            bufsize=10**8
-#        )
-#        pipe.stdin.write(video.tostring())
 
+    h = videos[0].shape[0]
+    t = videos[0].shape[2]
+    vid_dim = int(math.ceil(num_videos**0.5) * h)
+    out = cv2.VideoWriter(
+        '{}_samples.mp4'.format(video_path),
+        0x20,
+        25.0,
+        (vid_dim, vid_dim)
+    )
+
+    # Merge all the videos into one
+    video = np.random.rand(vid_dim, vid_dim, t, 3)
+    for i, sample in enumerate(videos[0:num_videos]):
+        x_pos = i % (vid_dim // h)
+        y_pos = i // (vid_dim // h)
+        video[y_pos*h:(y_pos+1)*h, x_pos*h:(x_pos+1)*h, :, :] = sample
+
+    for i in range(t):
+        out.write(np.uint8(255 * video[:,:,i,:]))
+    out.release()
 
 def vidread(path, resize_w, num_frames, is_grayscale = False):
-    # if (is_grayscale):
-    #     return scipy.misc.imread(path, flatten = True).astype(np.float)
-    # else:
-        # return scipy.misc.imread(path).astype(np.float)
     video = np.empty([num_frames, resize_w, resize_w, 3])
 
     cap = cv2.VideoCapture(path)
@@ -91,11 +70,14 @@ def vidread(path, resize_w, num_frames, is_grayscale = False):
             )
             video[i] = frame
             i += 1
-            # cv2.imshow('frame',frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         else:
             break
+
+    # Source video doesn't have enough frames, None is handled further up
+    if i < num_frames:
+        return None
 
     cap.release()
     cv2.destroyAllWindows()
@@ -123,12 +105,10 @@ def vidread(path, resize_w, num_frames, is_grayscale = False):
 #     return scipy.misc.imsave(path, merge(images, size))
 
 
-def center_crop(x, crop_h, crop_t, crop_w=None, resize_w=64, resize_t=16):
+def center_crop(x, crop_h, crop_t, crop_w=None, resize_w=64, resize_t=32):
     if crop_w is None:
         crop_w = crop_h
     h, w, t = x.shape[:2]
-    print x.shape
-    raise Exception('hi')
     i = int(round((h - crop_h)/2.))
     j = int(round((w - crop_w)/2.))
     k = int(round((t - crop_t)/2.))
@@ -137,9 +117,11 @@ def center_crop(x, crop_h, crop_t, crop_w=None, resize_w=64, resize_t=16):
     )
 
 
-def transform(video, npx=64, nf=16, is_crop=True, resize_w=64, resize_t=16):
+def transform(video, npx=64, nf=32, is_crop=True, resize_w=64, resize_t=32):
     # npx : # of pixels width/height of image
     # nf: # of frames of video
+    if video is None:
+        return None
     if is_crop:
         cropped_video = center_crop(
             video, npx, nf, resize_w=resize_w, resize_t=resize_t
@@ -168,21 +150,24 @@ def to_json(output_path, *layers):
                 W = np.rollaxis(w.eval(), 2, 0)
                 depth = W.shape[0]
 
-            biases = {"sy": 1, "sx": 1, "depth": depth, "w": ['%.2f' % elem for elem in list(B)]}
-            if bn != None:
-                gamma = bn.gamma.eval()
-                beta = bn.beta.eval()
-
-                gamma = {"sy": 1, "sx": 1, "depth": depth, "w": ['%.2f' % elem for elem in list(gamma)]}
-                beta = {"sy": 1, "sx": 1, "depth": depth, "w": ['%.2f' % elem for elem in list(beta)]}
-            else:
-                gamma = {"sy": 1, "sx": 1, "depth": 0, "w": []}
-                beta = {"sy": 1, "sx": 1, "depth": 0, "w": []}
+            biases = {
+                "sy": 1,
+                "sx": 1,
+                "depth": depth,
+                "w": ['%.2f' % elem for elem in list(B)]
+            }
+            gamma = {"sy": 1, "sx": 1, "depth": 0, "w": []}
+            beta = {"sy": 1, "sx": 1, "depth": 0, "w": []}
 
             if "lin/" in w.name:
                 fs = []
                 for w in W.T:
-                    fs.append({"sy": 1, "sx": 1, "depth": W.shape[0], "w": ['%.2f' % elem for elem in list(w)]})
+                    fs.append({
+                        "sy": 1,
+                        "sx": 1,
+                        "depth": W.shape[0],
+                        "w": ['%.2f' % elem for elem in list(w)]
+                    })
 
                 lines += """
                     var layer_%s = {
@@ -195,11 +180,24 @@ def to_json(output_path, *layers):
                         "gamma": %s,
                         "beta": %s,
                         "filters": %s
-                    };""" % (layer_idx.split('_')[0], W.shape[1], W.shape[0], biases, gamma, beta, fs)
+                    };""" % (
+                        layer_idx.split('_')[0],
+                        W.shape[1],
+                        W.shape[0],
+                        biases,
+                        gamma,
+                        beta,
+                        fs
+                    )
             else:
                 fs = []
                 for w_ in W:
-                    fs.append({"sy": 5, "sx": 5, "depth": W.shape[3], "w": ['%.2f' % elem for elem in list(w_.flatten())]})
+                    fs.append({
+                        "sy": 5,
+                        "sx": 5,
+                        "depth": W.shape[3],
+                        "w": ['%.2f' % elem for elem in list(w_.flatten())]
+                    })
 
                 lines += """
                     var layer_%s = {
@@ -212,8 +210,17 @@ def to_json(output_path, *layers):
                         "gamma": %s,
                         "beta": %s,
                         "filters": %s
-                    };""" % (layer_idx, 2**(int(layer_idx)+2), 2**(int(layer_idx)+2),
-                             W.shape[0], W.shape[3], biases, gamma, beta, fs)
+                    };""" % (
+                        layer_idx,
+                        2**(int(layer_idx)+2),
+                        2**(int(layer_idx)+2),
+                        W.shape[0],
+                        W.shape[3],
+                        biases,
+                        gamma,
+                        beta,
+                        fs
+                    )
         layer_f.write(" ".join(lines.replace("'","").split()))
 
 
