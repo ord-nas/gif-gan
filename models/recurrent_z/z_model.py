@@ -321,12 +321,10 @@ class VID_DCGAN(object):
         print "gr0:", layers.gr0.get_shape().as_list()
         layers.gr1 = tf.nn.relu(self.g_bn1(linear(layers.gr0, 512, 'gvideo_1')))
         print "gr1:", layers.gr1.get_shape().as_list()
-        layers.gr2 = tf.nn.relu(self.g_bn2(linear(layers.gr1, 512, 'gvideo_2')))
+        layers.gr2 = tf.nn.tanh(linear(layers.gr1, self.z_output_size, 'gvideo_2'))
         print "gr2:", layers.gr2.get_shape().as_list()
-        layers.gr3 = tf.nn.tanh(linear(layers.gr2, self.z_output_size, 'gvideo_3'))
-        print "gr3:", layers.gr3.get_shape().as_list()
 
-        return layers.gr3, layers
+        return layers.gr2, layers
 
     def discriminator(self, vid, reuse=False):
         layers = Layers()
