@@ -170,14 +170,16 @@ class DCGAN(object):
                 is_crop=self.is_crop,
                 resize_w=self.output_size,
                 resize_t=self.output_duration,
-                is_grayscale = self.is_grayscale
+                is_grayscale=self.is_grayscale,
+                should_threshold=config.should_threshold,
+                should_edge=config.should_edge
             )
             if sample is not None:
                 samples.append(sample)
             i += 1
             
         if (self.is_grayscale):
-            sample_images = np.array(samples).astype(np.float32)[:, :, :, :,None]
+            sample_images = np.array(samples).astype(np.float32)
         else:
             sample_images = np.array(samples).astype(np.float32)
             
@@ -212,16 +214,16 @@ class DCGAN(object):
                         is_crop=self.is_crop,
                         resize_w=self.output_size,
                         resize_t=self.output_duration,
-                        is_grayscale = self.is_grayscale
+                        is_grayscale=self.is_grayscale,
+                        should_threshold=config.should_threshold,
+                        should_edge=config.should_edge
                     )
                     if batch is not None:
                         batches.append(batch)
                     i += 1
 
                 if (self.is_grayscale):
-                    batch_images = np.array(batches).astype(np.float32)[
-                        :, :, :,:, None
-                    ]
+                    batch_images = np.array(batches).astype(np.float32)
                 else:
                     batch_images = np.array(batches).astype(np.float32)
 
@@ -276,7 +278,8 @@ class DCGAN(object):
                             vid_path,
                             epoch,
                             idx
-                        )
+                        ),
+                        is_grayscale=self.is_grayscale
                     )
                     print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
 

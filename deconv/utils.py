@@ -22,9 +22,13 @@ get_stddev = lambda x, k_h, k_w, k_t: 1/math.sqrt(k_w*k_h*k_t*x.get_shape()[-1])
 
 
 def get_image(image_path, image_size, video_duration, is_crop=True,
-              resize_w=64, resize_t=32, is_grayscale = False):
+              resize_w=64, resize_t=32, is_grayscale = False,
+              should_threshold=False, should_edge=False):
     return transform(
-        vidread(image_path, resize_w, video_duration, is_grayscale),
+        vidread(
+            image_path, resize_w, video_duration, is_grayscale,
+            should_threshold, should_edge
+        ),
         image_size,
         video_duration,
         is_crop,
@@ -32,7 +36,7 @@ def get_image(image_path, image_size, video_duration, is_crop=True,
         resize_t
     )
 
-def save_videos(videos, num_videos, video_path):
+def save_videos(videos, num_videos, video_path, is_grayscale=False):
     videos = inverse_transform(videos)
 
     h = videos[0].shape[0]
@@ -50,14 +54,22 @@ def save_videos(videos, num_videos, video_path):
     for i, sample in enumerate(videos[0:num_videos]):
         x_pos = i % (vid_dim // h)
         y_pos = i // (vid_dim // h)
+        if is_grayscale:
+            # Repeat same frame 3 times across color dimension to turn c_dim=1
+            # into a color video that's still B+W
+            sample = np.repeat(sample, 3, axis=3)
         video[y_pos*h:(y_pos+1)*h, x_pos*h:(x_pos+1)*h, :, :] = sample
 
     for i in range(t):
         out.write(np.uint8(255 * video[:,:,i,:]))
     out.release()
 
-def vidread(path, resize_w, num_frames, is_grayscale = False):
-    video = np.empty([num_frames, resize_w, resize_w, 3])
+def vidread(path, resize_w, num_frames, is_grayscale=False,
+            should_threshold=False, should_edge=False):
+    if is_grayscale:
+        video = np.empty([num_frames, resize_w, resize_w, 1])
+    else:
+        video = np.empty([num_frames, resize_w, resize_w, 3])
 
     cap = cv2.VideoCapture(path)
 
@@ -68,6 +80,14 @@ def vidread(path, resize_w, num_frames, is_grayscale = False):
             frame = cv2.resize(
                 frame, (resize_w, resize_w), interpolation=cv2.INTER_CUBIC
             )
+            if should_threshold:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                ret, frame = cv2.threshold(frame, 127, 255, cv2.THRESH_BINARY)
+                frame = np.expand_dims(frame, axis=2)
+            elif should_edge:
+                frame = cv2.Canny(frame, 100, 200)
+                frame = np.expand_dims(frame, axis=2)
+
             video[i] = frame
             i += 1
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -87,6 +107,7 @@ def vidread(path, resize_w, num_frames, is_grayscale = False):
     # Want [t, w, h, c] -> [w, h, t, c]
     video = np.swapaxes(video, 0, 2) # [t, w, h, c] -> [h, w, t, c]
     video = np.swapaxes(video, 0, 1) # [h, w, t, c] -> [w, h, t, c]
+
     return video
 
 

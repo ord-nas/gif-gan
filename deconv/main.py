@@ -26,6 +26,8 @@ flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image s
 flags.DEFINE_boolean("is_train", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("is_crop", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
+flags.DEFINE_boolean("should_threshold", False, "True for applying thresholding to input videos, False for nothing [False]")
+flags.DEFINE_boolean("should_edge", False, "True for applying edge detection to input videos, False for nothing [False]")
 FLAGS = flags.FLAGS
 
 def main(_):
