@@ -42,8 +42,7 @@ flags.DEFINE_boolean("is_train", False, "True for training, False for <not imple
 flags.DEFINE_boolean("video_shuffle", True, "True to shuffle the dataset, False otherwise [False]")
 flags.DEFINE_boolean("train_img_gen", False, "True to make the image generator params trainable [False]")
 flags.DEFINE_boolean("train_img_disc", False, "True to make the image discriminator params trainable [False]")
-flags.DEFINE_integer("disc_updates", 1, "Number of discriminator updates per batch [1]")
-flags.DEFINE_integer("gen_updates", 2, "Number of generator updates per batch [1]")
+flags.DEFINE_float("loss_target", 1.0, "Loss value to target before switching between gen and disc")
 FLAGS = flags.FLAGS
 
 class Layers(object):
@@ -204,7 +203,7 @@ class VID_DCGAN(object):
 
                 # Update D
                 d_losses = []
-                for _ in xrange(config.disc_updates):
+                while len(d_losses) == 0 or d_losses[-1] > config.loss_target:
                     _, d_loss_value = sess.run([d_optim, self.d_loss], feed_dict={
                         self.img_dcgan.images: batch_images,
                         self.z: batch_z,
@@ -214,7 +213,7 @@ class VID_DCGAN(object):
 
                 # Update G
                 g_losses = []
-                for _ in xrange(config.gen_updates):
+                while len(g_losses) == 0 or g_losses[-1] > config.loss_target:
                     _, g_loss_value = sess.run([g_optim, self.g_loss], feed_dict={
                         self.z: batch_z,
                         self.is_training: True,
