@@ -266,7 +266,7 @@ class DCGAN(object):
             h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, name='d_h3_conv'), train=train))
             h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h3_lin')
 
-            return tf.nn.sigmoid(h4), h4, h3
+            return tf.nn.sigmoid(h4), h4, h2
         else:
             yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
             x = conv_cond_concat(image, yb)
