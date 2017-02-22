@@ -115,3 +115,14 @@ def linear(input_, output_size, scope=None, stddev=0.02, bias_start=0.0, with_w=
             return tf.matmul(input_, matrix) + bias, matrix, bias
         else:
             return tf.matmul(input_, matrix) + bias
+
+def add_noise(inpt, stddev):
+    if stddev == 0.0:
+        return inpt
+    noise = tf.random_normal(inpt.get_shape().as_list(), stddev=stddev, name='noise')
+    return tf.add(inpt, noise)
+
+def get_std(inpt):
+    (mean, variance) = tf.nn.moments(inpt, axes=[0])
+    avg_variance = tf.reduce_mean(variance)
+    return tf.sqrt(avg_variance)

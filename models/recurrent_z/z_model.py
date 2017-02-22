@@ -44,6 +44,8 @@ flags.DEFINE_boolean("train_img_gen", False, "True to make the image generator p
 flags.DEFINE_boolean("train_img_disc", False, "True to make the image discriminator params trainable [False]")
 flags.DEFINE_integer("disc_updates", 1, "Number of discriminator updates per batch [1]")
 flags.DEFINE_integer("gen_updates", 2, "Number of generator updates per batch [1]")
+flags.DEFINE_float("image_noise", 0.0, "Std of noise to add to images")
+flags.DEFINE_float("activation_noise", 0.0, "Std of noise to add to D activations")
 FLAGS = flags.FLAGS
 
 class Layers(object):
@@ -52,7 +54,7 @@ class Layers(object):
 class VID_DCGAN(object):
     def __init__(self, sess, batch_size, z_input_size, z_output_size, vid_length,
                  input_image_size, output_image_size, c_dim,
-                 sample_rows=8, sample_cols=8):
+                 sample_rows=8, sample_cols=8, image_noise_std=0.0, activation_noise_std=0.0):
         # Member vars
         self.batch_size = batch_size
         self.z_input_size = z_input_size
@@ -63,6 +65,8 @@ class VID_DCGAN(object):
         self.c_dim = c_dim
         self.sample_rows = sample_rows
         self.sample_cols = sample_cols
+        self.image_noise_std = image_noise_std
+        self.activation_noise_std = activation_noise_std
 
         # Batch norm layers
         self.g_bn0 = batch_norm(name='gvideo_bn0')
@@ -98,18 +102,22 @@ class VID_DCGAN(object):
                                    dataset_name='', is_crop=False,
                                    checkpoint_dir='', sample_dir='',
                                    data_dir='', log_dir='', image_glob='', shuffle=False,
-                                   z=self.G_out)
+                                   z=self.G_out, noise_std=self.image_noise_std)
             self.image_gan_scope_name = tf.get_variable_scope().name + "/"
 
         # Build discriminator
         with tf.variable_scope('video_discriminator'):
             print "Scope name:", tf.get_variable_scope().name
             print "Making first discriminator..."
+            self.noisy_D_activations_inf = add_noise(self.img_dcgan.D_activations_inf, self.activation_noise_std)
+            self.D_activations_inf_std = get_std(self.img_dcgan.D_activations_inf)
             self.d_real_out, self.d_real_out_logits, self.D_real_layers = self.discriminator(
-                self.img_dcgan.D_activations_inf, reuse=False)
+                self.noisy_D_activations_inf, reuse=False)
             print "Making second discriminator..."
+            self.noisy_D_activations_inf_ = add_noise(self.img_dcgan.D_activations_inf_, self.activation_noise_std)
+            self.D_activations_inf_std_ = get_std(self.img_dcgan.D_activations_inf_)
             self.d_fake_out, self.d_fake_out_logits, self.D_fake_layers = self.discriminator(
-                self.img_dcgan.D_activations_inf_, reuse=True)
+                self.noisy_D_activations_inf_, reuse=True)
 
         # Define trainable variables
         t_vars = tf.trainable_variables()
@@ -205,11 +213,15 @@ class VID_DCGAN(object):
                 # Update D
                 d_losses = []
                 for _ in xrange(config.disc_updates):
-                    _, d_loss_value = sess.run([d_optim, self.d_loss], feed_dict={
-                        self.img_dcgan.images: batch_images,
-                        self.z: batch_z,
-                        self.is_training: True,
-                    })
+                    _, d_loss_value, images_std, sampler_std, real_D_std, fake_D_std = sess.run(
+                        [d_optim, self.d_loss, self.img_dcgan.images_std, self.img_dcgan.sampler_std,
+                         self.D_activations_inf_std, self.D_activations_inf_std_],
+                        feed_dict={
+                            self.img_dcgan.images: batch_images,
+                            self.z: batch_z,
+                            self.is_training: True,
+                        }
+                    )
                     d_losses.append(d_loss_value)
 
                 # Update G
@@ -228,6 +240,8 @@ class VID_DCGAN(object):
                 print("Epoch: [%2d] [%4d/%4d] d_loss: %s, g_loss: %s" \
                       % (epoch, i+1, len(files) // batch_size,
                          d_losses, g_losses))
+                print "Images std: %0.3f, sampler std: %0.3f | Real D std: %0.3f, fake D std: %0.3f" % (
+                    images_std, sampler_std, real_D_std, fake_D_std)
 
                 if counter % 10 == 0:
                     self.dump_sample(sample_z, sess, config, epoch, i, is_training=True)
@@ -381,8 +395,9 @@ def main(_):
                                   FLAGS.vid_length,
                                   FLAGS.image_size,
                                   FLAGS.output_size,
-                                  c_dim=FLAGS.c_dim)
-        
+                                  c_dim=FLAGS.c_dim,
+                                  image_noise_std=FLAGS.image_noise,
+                                  activation_noise_std=FLAGS.activation_noise)
             print "DONE"
 
             # Init vars

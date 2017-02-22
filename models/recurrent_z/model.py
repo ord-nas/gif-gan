@@ -16,7 +16,7 @@ class DCGAN(object):
                  gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='default',
                  checkpoint_dir=None, sample_dir=None, data_dir='./data',
                  log_dir='./logs', image_glob='*.jpg', shuffle=False,
-                 z=None, sample_z=None):
+                 z=None, sample_z=None, noise_std=0.0):
         """
 
         Args:
@@ -42,6 +42,7 @@ class DCGAN(object):
         self.log_dir = log_dir
         self.image_glob = image_glob
         self.shuffle = shuffle
+        self.noise_std = noise_std
 
         self.y_dim = y_dim
         self.z_dim = z_dim
@@ -78,6 +79,8 @@ class DCGAN(object):
 
         self.images = tf.placeholder(tf.float32, [self.batch_size] + [self.output_size, self.output_size, self.c_dim],
                                     name='real_images')
+        self.noisy_images = add_noise(self.images, self.noise_std)
+        self.images_std = get_std(self.images)
         self.sample_images= tf.placeholder(tf.float32, [self.sample_size] + [self.output_size, self.output_size, self.c_dim],
                                         name='sample_images')
         if z is not None:
@@ -94,18 +97,22 @@ class DCGAN(object):
 
         if self.y_dim:
             self.G = self.generator(self.z, self.y)
-            self.D, self.D_logits  = self.discriminator(self.images, self.y, reuse=False)
+            self.D, self.D_logits  = self.discriminator(self.noisy_images, self.y, reuse=False)
 
             self.sampler = self.sampler(self.z, self.y)
             self.D_, self.D_logits_ = self.discriminator(self.G, self.y, reuse=True)
         else:
             self.G = self.generator(self.z)
-            self.D, self.D_logits, self.D_activations = self.discriminator(self.images)
-            self.D_inf, self.D_logits_inf, self.D_activations_inf = self.discriminator(self.images, reuse=True, train=False)
+            self.noisy_G = add_noise(self.G, self.noise_std)
+            self.G_std = get_std(self.G)
+            self.D, self.D_logits, self.D_activations = self.discriminator(self.noisy_images)
+            self.D_inf, self.D_logits_inf, self.D_activations_inf = self.discriminator(self.noisy_images, reuse=True, train=False)
 
             self.sampler = self.sampler(self.sample_z)
-            self.D_, self.D_logits_, self.D_activations_ = self.discriminator(self.G, reuse=True)
-            self.D_inf_, self.D_logits_inf_, self.D_activations_inf_ = self.discriminator(self.sampler, reuse=True, train=False)
+            self.noisy_sampler = add_noise(self.sampler, self.noise_std)
+            self.sampler_std = get_std(self.sampler)
+            self.D_, self.D_logits_, self.D_activations_ = self.discriminator(self.noisy_G, reuse=True)
+            self.D_inf_, self.D_logits_inf_, self.D_activations_inf_ = self.discriminator(self.noisy_sampler, reuse=True, train=False)
 
         self.d_sum = tf.histogram_summary("d", self.D)
         self.d__sum = tf.histogram_summary("d_", self.D_)
