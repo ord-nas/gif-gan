@@ -253,16 +253,25 @@ class VID_DCGAN(object):
 
     def dump_sample(self, sample_z, sess, config, epoch, idx, is_training=False):
         sz = self.output_image_size
-        samples = sess.run([self.img_dcgan.sampler], feed_dict={
-            self.z: sample_z,
-            self.is_training: is_training,
-        })
+        (samples, noisy_samples) = sess.run(
+            [self.img_dcgan.sampler, self.img_dcgan.noisy_sampler],
+            feed_dict={
+                self.z: sample_z,
+                self.is_training: is_training,
+            }
+        )
         videos = np.reshape(samples, [self.sample_rows,
                                       self.sample_cols,
                                       self.vid_length,
                                       sz,
                                       sz,
                                       self.c_dim])
+        noisy_videos = np.reshape(noisy_samples, [self.sample_rows,
+                                                  self.sample_cols,
+                                                  self.vid_length,
+                                                  sz,
+                                                  sz,
+                                                  self.c_dim])
         
         folder = "train" if is_training else "inference"
         folder = os.path.join(config.video_sample_dir, folder)
@@ -270,6 +279,7 @@ class VID_DCGAN(object):
             # No recursive os.makedirs
             os.mkdir(folder)
 
+        # Write the clean samples
         filename = '{}/train_{:02d}_{:04d}.mp4'.format(folder, epoch, idx)
         print "Writing samples to", filename
         w = cv2.VideoWriter(filename,
@@ -284,6 +294,27 @@ class VID_DCGAN(object):
             for r in xrange(self.sample_rows):
                 for c in xrange(self.sample_cols):
                     im = inverse_transform(videos[r,c,t,:,:,:])
+                    im = np.around(im * 255).astype('uint8')
+                    im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+                    frame[r*sz:(r+1)*sz, c*sz:(c+1)*sz, :] = im
+            w.write(frame)
+        w.release()
+
+        # Write the noisy samples
+        filename = '{}/train_noisy_{:02d}_{:04d}.mp4'.format(folder, epoch, idx)
+        print "Writing noisy samples to", filename
+        w = cv2.VideoWriter(filename,
+                            0x20,
+                            25.0,
+                            (self.sample_cols * sz, self.sample_rows * sz))
+        for t in xrange(self.vid_length):
+            frame = np.zeros(shape=[self.sample_rows * sz,
+                                    self.sample_cols * sz,
+                                    self.c_dim],
+                             dtype=np.uint8)
+            for r in xrange(self.sample_rows):
+                for c in xrange(self.sample_cols):
+                    im = inverse_transform(noisy_videos[r,c,t,:,:,:])
                     im = np.around(im * 255).astype('uint8')
                     im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
                     frame[r*sz:(r+1)*sz, c*sz:(c+1)*sz, :] = im
