@@ -10,7 +10,7 @@ from model import DCGAN
 
 # Params for algorithm
 parser = argparse.ArgumentParser()
-parser.add_argument("--input_video", required=True, help="Search for first frame of this video")
+parser.add_argument("--input_videos", required=True, nargs='+', help="Search for first frame of these videos")
 parser.add_argument("--random_seed", type=int, default=0)
 parser.add_argument("--num_rows", type=int, default=8)
 parser.add_argument("--num_cols", type=int, default=8)
@@ -19,6 +19,12 @@ parser.add_argument("--learning_rate", type=float, default=0.0002, help="Learnin
 parser.add_argument("--beta1", type=float, default=0.5, help="Momentum term of adam [0.5]")
 parser.add_argument("--discriminator_mode", required=True, choices=["train", "inference"])
 parser.add_argument("--sample_dir", required=True, help="Directory name to save the image samples")
+# Loss weights
+parser.add_argument("--pixel_L2_weight", type=float, default=0.0, help="L2 loss over pixel data")
+parser.add_argument("--pixel_L1_weight", type=float, default=0.0, help="L1 loss over pixel data")
+parser.add_argument("--activations_L2_weight", type=float, default=1.0, help="L2 loss over discriminator activations")
+parser.add_argument("--activations_L1_weight", type=float, default=0.0, help="L1 loss over discriminator activations")
+parser.add_argument("--generator_loss_weight", type=float, default=0.0, help="Generator loss weight")
 # DCGAN params
 parser.add_argument("--checkpoint_directory", required=True, help="Directory to load checkpoint files from")
 parser.add_argument("--image_size", type=int, default=64, help="Size of images used")
@@ -77,27 +83,78 @@ def main():
         os.makedirs(args.sample_dir)
 
     # Load the list of video files
-    target = load_image(args.input_video, args.image_size)
+    targets = []
+    for v in args.input_videos:
+        targets.append(load_image(v, args.image_size))
+    assert dcgan.batch_size % len(targets) == 0
+    replicas = dcgan.batch_size / len(targets)
+    print "TARGETS:", len(targets), targets[0].shape
+    print "REPLICAS:", replicas
+    targets_array = np.array(targets * replicas)
+    print "TARGETS ARRAY:", targets_array.shape
     train = (args.discriminator_mode == "train")
     target_activations_tensor = dcgan.D_activations if train else dcgan.D_activations_inf
     target_activations = sess.run(target_activations_tensor, feed_dict={
-        dcgan.images: np.array([target] * dcgan.batch_size),
+        dcgan.images: targets_array,
     })
     print "TARGET ACTIVATIONS:", target_activations[0]
 
     # Save the target to disk
-    save_images(np.array([target]), [1, 1],
+    save_images(targets_array, [replicas, len(targets)],
                 os.path.join(args.sample_dir, "target.png"))
 
-    # Build optimizers for making the images' activations match the target
+    # Build optimizers for making the image match the target
+
+    # Normalize the weights
+    loss_weights = ['pixel_L2_weight',
+                    'pixel_L1_weight',
+                    'activations_L2_weight',
+                    'activations_L1_weight',
+                    'generator_loss_weight']
+    total = sum([getattr(args, lw) for lw in loss_weights])
+    print "Normalized loss weights:"
+    for lw in loss_weights:
+        setattr(args, lw, getattr(args, lw) / total)
+        print lw, getattr(args, lw)
+
+    # Activations L2 loss
     activations_tensor = dcgan.D_activations_ if train else dcgan.D_activations_inf_
-    print activations_tensor.get_shape().as_list()
-    distance = tf.sqrt(tf.reduce_sum(tf.square(activations_tensor - tf.constant(target_activations)),
-                                     reduction_indices=[1,2,3]))
-    print distance.get_shape().as_list()
-    loss = tf.reduce_mean(distance)
-    print loss.get_shape().as_list()
+    print "activations:", activations_tensor.get_shape().as_list()
+    activations_L2 = tf.reduce_mean(tf.square(activations_tensor - tf.constant(target_activations)),
+                                    reduction_indices=[1,2,3])
+    print "activations L2:", activations_L2.get_shape().as_list()
+    activations_L2_loss = tf.reduce_mean(activations_L2)
+    # Activations L1 loss
+    activations_L1 = tf.reduce_mean(tf.abs(activations_tensor - tf.constant(target_activations)),
+                                    reduction_indices=[1,2,3])
+    print "activations L1:", activations_L1.get_shape().as_list()
+    activations_L1_loss = tf.reduce_mean(activations_L1)
+    # Generator loss
+    generator_loss = dcgan.g_loss if train else dcgan.g_loss_inf
+    print "Generator loss:", generator_loss.get_shape().as_list()
+    # Pixel L2 loss
+    image_tensor = dcgan.G if train else dcgan.sampler
+    print "Generated image tensor:", image_tensor.get_shape().as_list()
+    print "Target image:", targets_array.shape
+    pixel_difference = image_tensor - targets_array
+    print "Difference:", pixel_difference.get_shape().as_list()
+    pixel_L2 = tf.reduce_mean(tf.square(pixel_difference),
+                              reduction_indices=[1,2,3])
+    print "pixel L2:", pixel_L2.get_shape().as_list()
+    pixel_L2_loss = tf.reduce_mean(pixel_L2)
+    # Pixel L1 loss
+    pixel_L1 = tf.reduce_mean(tf.abs(pixel_difference),
+                              reduction_indices=[1,2,3])
+    print "pixel L1:", pixel_L1.get_shape().as_list()
+    pixel_L1_loss = tf.reduce_mean(pixel_L1)
+    
     with tf.variable_scope("optimizers"):
+        # Compute overall loss
+        loss = (activations_L2_loss * args.activations_L2_weight +
+                activations_L1_loss * args.activations_L1_weight +
+                pixel_L2_loss * args.pixel_L2_weight +
+                pixel_L1_loss * args.pixel_L1_weight +
+                generator_loss * args.generator_loss_weight)
         optimizer = tf.train.AdamOptimizer(args.learning_rate, beta1=args.beta1)
         optim = optimizer.minimize(loss, var_list=[dcgan.z])
         scope_vars = tf.get_collection(tf.GraphKeys.VARIABLES,
@@ -123,18 +180,19 @@ def main():
                 os.path.join(args.sample_dir, "final.png"))
     print "Saved final images"
 
-    print "Final distances:"
-    ds = sess.run(distance)
-    for d in ds:
-        print d
+    # TODO FIXME
+    # print "Final activation distances:"
+    # ds = sess.run(activations_distance)
+    # for d in ds:
+    #     print d
 
-    print "Sanity check distances:"
-    final_activations = sess.run(target_activations_tensor, feed_dict={
-        dcgan.images: samples,
-    })
-    for i in xrange(dcgan.batch_size):
-        a = final_activations[i]
-        print np.linalg.norm(a - target_activations[0])
+    # print "Sanity check activation distances:"
+    # final_activations = sess.run(target_activations_tensor, feed_dict={
+    #     dcgan.images: samples,
+    # })
+    # for i in xrange(dcgan.batch_size):
+    #     a = final_activations[i]
+    #     print np.linalg.norm(a - target_activations[0])
 
 if __name__ == "__main__":
     main()
