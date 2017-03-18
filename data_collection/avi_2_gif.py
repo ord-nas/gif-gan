@@ -42,9 +42,10 @@ dest = os.path.join(cwd, dest)
 print source, dest
 
 for filename in os.listdir(source):
-	if filename.endswith(".avi"):
+	if filename.endswith(".mp4"):
 		abs_filename = os.path.join(source, filename)
-		clip = VideoFileClip(abs_filename)
+		clip = VideoFileClip(abs_filename).subclip(0,0.629)
 		clip.write_gif(
-			os.path.join(dest, filename).replace('.avi', '.gif')
+			os.path.join(dest, filename).replace('.mp4', '.gif'),
+            fps=25
 		)
