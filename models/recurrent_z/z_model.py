@@ -46,6 +46,9 @@ flags.DEFINE_integer("disc_updates", 1, "Number of discriminator updates per bat
 flags.DEFINE_integer("gen_updates", 2, "Number of generator updates per batch [1]")
 flags.DEFINE_float("image_noise", 0.0, "Std of noise to add to images")
 flags.DEFINE_float("activation_noise", 0.0, "Std of noise to add to D activations")
+# Flags for controlling checkpoint saving behaviour
+flags.DEFINE_integer("sample_frequency", 10, "How often to save checkpoints & samples")
+flags.DEFINE_integer("max_checkpoints_to_keep", 5, "Max number of checkpoints to keep")
 FLAGS = flags.FLAGS
 
 class Layers(object):
@@ -197,7 +200,7 @@ class VID_DCGAN(object):
                                                   self.z_input_size))
 
         # Initialize a saver
-        saver = tf.train.Saver()
+        saver = tf.train.Saver(max_to_keep=config.max_checkpoints_to_keep)
         writer = tf.summary.FileWriter(config.log_dir, sess.graph)
 
         # Main train loop
@@ -243,7 +246,7 @@ class VID_DCGAN(object):
                 print "Images std: %0.3f, sampler std: %0.3f | Real D std: %0.3f, fake D std: %0.3f" % (
                     images_std, sampler_std, real_D_std, fake_D_std)
 
-                if counter % 10 == 0:
+                if counter % config.sample_frequency == 0:
                     self.dump_sample(sample_z, sess, config, epoch, i, is_training=True)
                     self.dump_sample(sample_z, sess, config, epoch, i, is_training=False)
                     saver.save(sess,
