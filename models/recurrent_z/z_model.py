@@ -303,26 +303,27 @@ class VID_DCGAN(object):
             w.write(frame)
         w.release()
 
-        # Write the noisy samples
-        filename = '{}/train_noisy_{:02d}_{:04d}.mp4'.format(folder, epoch, idx)
-        print "Writing noisy samples to", filename
-        w = cv2.VideoWriter(filename,
-                            0x20,
-                            25.0,
-                            (self.sample_cols * sz, self.sample_rows * sz))
-        for t in xrange(self.vid_length):
-            frame = np.zeros(shape=[self.sample_rows * sz,
-                                    self.sample_cols * sz,
-                                    self.c_dim],
-                             dtype=np.uint8)
-            for r in xrange(self.sample_rows):
-                for c in xrange(self.sample_cols):
-                    im = inverse_transform(noisy_videos[r,c,t,:,:,:])
-                    im = np.around(im * 255).astype('uint8')
-                    im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
-                    frame[r*sz:(r+1)*sz, c*sz:(c+1)*sz, :] = im
-            w.write(frame)
-        w.release()
+        # Write the noisy samples, if applicable
+        if config.image_noise > 0:
+            filename = '{}/train_noisy_{:02d}_{:04d}.mp4'.format(folder, epoch, idx)
+            print "Writing noisy samples to", filename
+            w = cv2.VideoWriter(filename,
+                                0x20,
+                                25.0,
+                                (self.sample_cols * sz, self.sample_rows * sz))
+            for t in xrange(self.vid_length):
+                frame = np.zeros(shape=[self.sample_rows * sz,
+                                        self.sample_cols * sz,
+                                        self.c_dim],
+                                 dtype=np.uint8)
+                for r in xrange(self.sample_rows):
+                    for c in xrange(self.sample_cols):
+                        im = inverse_transform(noisy_videos[r,c,t,:,:,:])
+                        im = np.around(im * 255).astype('uint8')
+                        im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+                        frame[r*sz:(r+1)*sz, c*sz:(c+1)*sz, :] = im
+                w.write(frame)
+            w.release()
                 
     def load_videos(self, files):
         n = len(files)
