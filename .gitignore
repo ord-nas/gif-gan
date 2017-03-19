@@ -90,3 +90,6 @@ ENV/
 
 # Emacs temporary files
 *~
+
+# Firebase node modules
+firebase/functions/node_modules/
