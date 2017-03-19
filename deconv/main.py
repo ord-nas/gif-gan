@@ -59,6 +59,7 @@ def main(_):
             dcgan.train(FLAGS)
         else:
             dcgan.load(FLAGS.checkpoint_dir)
+            utils.explore(dcgan)
 
         # if FLAGS.visualize:
         #     # TODO: jonathan change these once architecture is finalized

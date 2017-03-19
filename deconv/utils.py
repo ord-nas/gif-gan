@@ -156,6 +156,10 @@ def inverse_transform(videos):
     return (videos+1.)/2.
 
 
+def explore(dcgan):
+    
+
+
 def to_json(output_path, *layers):
     with open(output_path, "w") as layer_f:
         lines = ""
