@@ -114,6 +114,18 @@ class VID_DCGAN(object):
             print "Success!"
         else:
             print "FAIL!"
+
+    def load_checkpoint(self, sess, checkpoint_dir):
+        print "Loading checkpoints from", checkpoint_dir
+
+        ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+        if ckpt and ckpt.model_checkpoint_path:
+            ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
+            saver = tf.train.Saver()
+            saver.restore(sess, os.path.join(checkpoint_dir, ckpt_name))
+            print "Success!"
+        else:
+            print "FAIL!"
         
     def train(self, sess, config):
         files = []
