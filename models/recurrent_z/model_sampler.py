@@ -26,6 +26,10 @@ def main(_):
 
     np.random.seed(FLAGS.random_seed)
 
+    if not os.path.exists(FLAGS.output_directory):
+        # No recursive os.makedirs
+        os.mkdir(FLAGS.output_directory)
+
     with tf.Session() as sess:
         with tf.variable_scope('video_gan'):
             vid_z_dim = 120
@@ -62,7 +66,6 @@ def main(_):
                                               vid_dcgan.output_image_size,
                                               vid_dcgan.c_dim])
                 upper_bound = min(FLAGS.num_samples, i+vid_dcgan.batch_size)
-                print "Writing samples %d to %d ..." % (i, upper_bound)
                 for j in xrange(i, upper_bound):
                     filename = os.path.join(FLAGS.output_directory, "%d.gif" % j)
                     utils.make_gif(videos[j - i, :, :, :, :], filename, duration)
