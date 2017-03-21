@@ -49,7 +49,7 @@ class VID_DCGAN(object):
         # Build generator
         self.z = tf.placeholder(tf.float32, [self.batch_size, self.z_input_size],
                                 name='gvideo_z')
-        self.z_first_frame_component = z[:, :self.img_dcgan.z_output_size]
+        self.z_first_frame_component = self.z[:, :self.z_output_size]
         with tf.variable_scope('video_generator'):
             print "Making generator..."
             self.G, self.G_layers = self.generator(self.z, reuse=False, train=True)

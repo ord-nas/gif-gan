@@ -74,7 +74,7 @@ def main(_):
                                   FLAGS.output_size,
                                   c_dim=FLAGS.c_dim,
                                   image_noise_std=FLAGS.image_noise,
-                                  activation_noise_std=FLAGS.activation_noise
+                                  activation_noise_std=FLAGS.activation_noise,
                                   first_frame_loss_scalar=FLAGS.first_frame_loss_scalar)
             print "DONE"
 
