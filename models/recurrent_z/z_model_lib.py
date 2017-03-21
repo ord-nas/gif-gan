@@ -15,7 +15,8 @@ class Layers(object):
 class VID_DCGAN(object):
     def __init__(self, sess, batch_size, z_input_size, z_output_size, vid_length,
                  input_image_size, output_image_size, c_dim,
-                 sample_rows=8, sample_cols=8, image_noise_std=0.0, activation_noise_std=0.0):
+                 sample_rows=8, sample_cols=8, image_noise_std=0.0, activation_noise_std=0.0,
+                 first_frame_loss_scalar=0.0):
         # Member vars
         self.batch_size = batch_size
         self.z_input_size = z_input_size
@@ -28,6 +29,7 @@ class VID_DCGAN(object):
         self.sample_cols = sample_cols
         self.image_noise_std = image_noise_std
         self.activation_noise_std = activation_noise_std
+        self.first_frame_loss_scalar = first_frame_loss_scalar
 
         # Batch norm layers
         self.g_bn0 = batch_norm(name='gvideo_bn0')
@@ -47,6 +49,7 @@ class VID_DCGAN(object):
         # Build generator
         self.z = tf.placeholder(tf.float32, [self.batch_size, self.z_input_size],
                                 name='gvideo_z')
+        self.z_first_frame_component = z[:, :self.img_dcgan.z_output_size]
         with tf.variable_scope('video_generator'):
             print "Making generator..."
             self.G, self.G_layers = self.generator(self.z, reuse=False, train=True)
@@ -54,17 +57,22 @@ class VID_DCGAN(object):
             self.G_sampler, self.G_sampler_layers = self.generator(self.z, reuse=True, train=False)
             self.is_training = tf.placeholder(tf.bool, [], name='gvideo_train')
             self.G_out = tf.cond(self.is_training, lambda: self.G, lambda: self.G_sampler)
+            print "G_out shape:", self.G_out.get_shape().as_list()
+            self.first_frames = self.G_out[::self.vid_length,:]
+            print "first_frames shape:", self.first_frames.get_shape().as_list()
 
         # Build the inner image gan
         with tf.variable_scope('image_gan'):
             self.img_dcgan = DCGAN(sess, image_size=self.input_image_size,
                                    batch_size=self.batch_size * self.vid_length,
-                                   output_size=self.output_image_size, c_dim=self.c_dim,
+                                   output_size=self.output_image_size,
+                                   z_dim=self.z_output_size, c_dim=self.c_dim,
                                    dataset_name='', is_crop=False,
                                    checkpoint_dir='', sample_dir='',
                                    data_dir='', log_dir='', image_glob='', shuffle=False,
                                    z=self.G_out, noise_std=self.image_noise_std)
             self.image_gan_scope_name = tf.get_variable_scope().name + "/"
+
 
         # Build discriminator
         with tf.variable_scope('video_discriminator'):
@@ -93,8 +101,16 @@ class VID_DCGAN(object):
         self.d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
             self.d_fake_out_logits, tf.zeros_like(self.d_fake_out)))
         self.d_loss = self.d_loss_real + self.d_loss_fake
-        self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+        self.g_loss_realism = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
             self.d_fake_out_logits, tf.ones_like(self.d_fake_out)))
+        self.g_loss_first_frame = tf.reduce_mean(tf.square(tf.subtract(
+            self.first_frames, self.z_first_frame_component)))
+        print "First frame loss: average{{%s - %s}^2} -> %s" % (
+            self.first_frames.get_shape().as_list(),
+            self.z_first_frame_component.get_shape().as_list(),
+            self.g_loss_first_frame.get_shape().as_list())
+        self.g_loss = self.g_loss_realism + (self.first_frame_loss_scalar *
+                                             self.g_loss_first_frame)
 
     def load_image_gan(self, sess, checkpoint_dir):
         print "Loading checkpoints from", checkpoint_dir
@@ -200,7 +216,8 @@ class VID_DCGAN(object):
                 # Update G
                 g_losses = []
                 for _ in xrange(config.gen_updates):
-                    _, g_loss_value = sess.run([g_optim, self.g_loss], feed_dict={
+                    tensor_list = [g_optim, self.g_loss, self.g_loss_first_frame]
+                    _, g_loss_value, g_loss_first_frame_value = sess.run(tensor_list, feed_dict={
                         self.z: batch_z,
                         self.is_training: True,
                     })
@@ -210,9 +227,9 @@ class VID_DCGAN(object):
                 # errD_real = 0#self.d_loss_real.eval({self.img_dcgan.images: batch_images})
                 # errG = 0#self.g_loss.eval({self.z: batch_z})
                 counter += 1
-                print("Epoch: [%2d] [%4d/%4d] d_loss: %s, g_loss: %s" \
+                print("Epoch: [%2d] [%4d/%4d] d_loss: %s, g_loss: %s, first_frame_loss: %s" \
                       % (epoch, i+1, len(files) // batch_size,
-                         d_losses, g_losses))
+                         d_losses, g_losses, g_loss_first_frame_value))
                 print "Images std: %0.3f, sampler std: %0.3f | Real D std: %0.3f, fake D std: %0.3f" % (
                     images_std, sampler_std, real_D_std, fake_D_std)
 

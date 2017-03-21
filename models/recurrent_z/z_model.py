@@ -49,6 +49,7 @@ flags.DEFINE_integer("disc_updates", 1, "Number of discriminator updates per bat
 flags.DEFINE_integer("gen_updates", 2, "Number of generator updates per batch [1]")
 flags.DEFINE_float("image_noise", 0.0, "Std of noise to add to images")
 flags.DEFINE_float("activation_noise", 0.0, "Std of noise to add to D activations")
+flags.DEFINE_float("first_frame_loss_scalar", 0.0, "first_frame_loss_scalar")
 # Flags for controlling checkpoint saving behaviour
 flags.DEFINE_integer("sample_frequency", 10, "How often to save checkpoints & samples")
 flags.DEFINE_integer("max_checkpoints_to_keep", 5, "Max number of checkpoints to keep")
@@ -73,7 +74,8 @@ def main(_):
                                   FLAGS.output_size,
                                   c_dim=FLAGS.c_dim,
                                   image_noise_std=FLAGS.image_noise,
-                                  activation_noise_std=FLAGS.activation_noise)
+                                  activation_noise_std=FLAGS.activation_noise
+                                  first_frame_loss_scalar=FLAGS.first_frame_loss_scalar)
             print "DONE"
 
             # Init vars
