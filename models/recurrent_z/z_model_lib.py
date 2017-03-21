@@ -103,14 +103,13 @@ class VID_DCGAN(object):
         self.d_loss = self.d_loss_real + self.d_loss_fake
         self.g_loss_realism = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
             self.d_fake_out_logits, tf.ones_like(self.d_fake_out)))
-        self.g_loss_first_frame = tf.reduce_mean(tf.square(tf.subtract(
+        self.g_loss_first_frame = self.first_frame_loss_scalar * tf.reduce_mean(tf.square(tf.subtract(
             self.first_frames, self.z_first_frame_component)))
         print "First frame loss: average{{%s - %s}^2} -> %s" % (
             self.first_frames.get_shape().as_list(),
             self.z_first_frame_component.get_shape().as_list(),
             self.g_loss_first_frame.get_shape().as_list())
-        self.g_loss = self.g_loss_realism + (self.first_frame_loss_scalar *
-                                             self.g_loss_first_frame)
+        self.g_loss = self.g_loss_realism + self.g_loss_first_frame
 
     def load_image_gan(self, sess, checkpoint_dir):
         print "Loading checkpoints from", checkpoint_dir
@@ -184,6 +183,19 @@ class VID_DCGAN(object):
 
         sample_z = np.random.uniform(-1, 1, size=(self.sample_rows * self.sample_cols,
                                                   self.z_input_size))
+        face_z = np.random.uniform(-1, 1, size=(self.sample_rows, 1, self.z_output_size))
+        print "FACE:", face_z.shape
+        face_z = np.repeat(face_z, self.sample_cols, axis=1)
+        print "FACE:", face_z.shape
+        expression_z = np.random.uniform(-1, 1, size=(1, self.sample_cols,
+                                                       self.z_input_size - self.z_output_size))
+        print "EXPRESSION:", expression_z.shape
+        expression_z = np.repeat(expression_z, self.sample_cols, axis=0)
+        print "EXPRESSION:", expression_z.shape
+        face_expression_z = np.concatenate((face_z, expression_z), axis=2)
+        print "TOTAL:", face_expression_z.shape
+        cross_sample_z = np.reshape(face_expression_z, sample_z.shape)
+        print "TOTAL:", cross_sample_z.shape
 
         # Initialize a saver
         saver = tf.train.Saver(max_to_keep=config.max_checkpoints_to_keep)
@@ -234,14 +246,15 @@ class VID_DCGAN(object):
                     images_std, sampler_std, real_D_std, fake_D_std)
 
                 if counter % config.sample_frequency == 0:
-                    self.dump_sample(sample_z, sess, config, epoch, i, is_training=True)
+                    #self.dump_sample(sample_z, sess, config, epoch, i, is_training=True)
                     self.dump_sample(sample_z, sess, config, epoch, i, is_training=False)
+                    self.dump_sample(cross_sample_z, sess, config, epoch, i, is_training=False, prefix="cross_sample_")
                     saver.save(sess,
                                os.path.join(config.video_checkpoint_dir,
                                             "VID_DCGAN.model"),
                                global_step=counter)
 
-    def dump_sample(self, sample_z, sess, config, epoch, idx, is_training=False):
+    def dump_sample(self, sample_z, sess, config, epoch, idx, is_training=False, prefix=""):
         sz = self.output_image_size
         (samples, noisy_samples) = sess.run(
             [self.img_dcgan.sampler, self.img_dcgan.noisy_sampler],
@@ -270,7 +283,7 @@ class VID_DCGAN(object):
             os.mkdir(folder)
 
         # Write the clean samples
-        filename = '{}/train_{:02d}_{:04d}.mp4'.format(folder, epoch, idx)
+        filename = '{}/{}train_{:02d}_{:04d}.mp4'.format(folder, prefix, epoch, idx)
         print "Writing samples to", filename
         w = cv2.VideoWriter(filename,
                             0x20,
@@ -292,7 +305,7 @@ class VID_DCGAN(object):
 
         # Write the noisy samples, if applicable
         if config.image_noise > 0:
-            filename = '{}/train_noisy_{:02d}_{:04d}.mp4'.format(folder, epoch, idx)
+            filename = '{}/{}train_noisy_{:02d}_{:04d}.mp4'.format(folder, prefix, epoch, idx)
             print "Writing noisy samples to", filename
             w = cv2.VideoWriter(filename,
                                 0x20,
