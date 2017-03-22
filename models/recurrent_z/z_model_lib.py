@@ -15,7 +15,7 @@ class Layers(object):
 class VID_DCGAN(object):
     def __init__(self, sess, batch_size, z_input_size, z_output_size, vid_length,
                  input_image_size, output_image_size, c_dim,
-                 sample_rows=8, sample_cols=8, image_noise_std=0.0, activation_noise_std=0.0,
+                 sample_cols=8, image_noise_std=0.0, activation_noise_std=0.0,
                  first_frame_loss_scalar=0.0):
         # Member vars
         self.batch_size = batch_size
@@ -25,8 +25,9 @@ class VID_DCGAN(object):
         self.input_image_size = input_image_size
         self.output_image_size = output_image_size
         self.c_dim = c_dim
-        self.sample_rows = sample_rows
         self.sample_cols = sample_cols
+        assert batch_size % sample_cols == 0
+        self.sample_rows = batch_size / sample_cols
         self.image_noise_std = image_noise_std
         self.activation_noise_std = activation_noise_std
         self.first_frame_loss_scalar = first_frame_loss_scalar
@@ -190,7 +191,7 @@ class VID_DCGAN(object):
         expression_z = np.random.uniform(-1, 1, size=(1, self.sample_cols,
                                                        self.z_input_size - self.z_output_size))
         print "EXPRESSION:", expression_z.shape
-        expression_z = np.repeat(expression_z, self.sample_cols, axis=0)
+        expression_z = np.repeat(expression_z, self.sample_rows, axis=0)
         print "EXPRESSION:", expression_z.shape
         face_expression_z = np.concatenate((face_z, expression_z), axis=2)
         print "TOTAL:", face_expression_z.shape
@@ -248,7 +249,8 @@ class VID_DCGAN(object):
                 if counter % config.sample_frequency == 0:
                     #self.dump_sample(sample_z, sess, config, epoch, i, is_training=True)
                     self.dump_sample(sample_z, sess, config, epoch, i, is_training=False)
-                    self.dump_sample(cross_sample_z, sess, config, epoch, i, is_training=False, prefix="cross_sample_")
+                    if config.first_frame_loss_scalar > 0:
+                        self.dump_sample(cross_sample_z, sess, config, epoch, i, is_training=False, prefix="cross_sample_")
                     saver.save(sess,
                                os.path.join(config.video_checkpoint_dir,
                                             "VID_DCGAN.model"),
@@ -384,6 +386,7 @@ class VID_DCGAN(object):
 
         print "vid:", vid.get_shape().as_list()
         vid = tf.reshape(vid, [self.batch_size, self.vid_length, 8, 8, -1])
+        #first_frames = vid[:, 0:1, :, :, :]
         num_filters = vid.get_shape().as_list()[-1]
         print "vid (reshaped):", vid.get_shape().as_list()
 
@@ -401,12 +404,12 @@ class VID_DCGAN(object):
         # layers.dr0 = tf.nn.relu(self.d_bn0(layers.d0))
         # print "dr0:", layers.dr0.get_shape().as_list()
 
-        layers.dr0 = vid
-        layers.dr1 = lrelu(conv3d(layers.dr0, 256, name='dvideo_h1'))
+        layers.dr0 = vid# - first_frames
+        layers.dr1 = tf.nn.max_pool3d(vid, [1, 2, 2, 2, 1], [1, 2, 2, 2, 1], padding='SAME')#lrelu(conv3d(layers.dr0, 128, name='dvideo_h1'))
         print "dr1:", layers.dr1.get_shape().as_list()
-        layers.dr2 = lrelu(self.d_bn2(conv3d(layers.dr1, 256, name='dvideo_h2')))
+        layers.dr2 = tf.nn.max_pool3d(layers.dr1, [1, 2, 2, 2, 1], [1, 2, 2, 2, 1], padding='SAME')#lrelu(self.d_bn2(conv3d(layers.dr1, 128, name='dvideo_h2')))
         print "dr2:", layers.dr2.get_shape().as_list()
-        layers.dr3 = lrelu(self.d_bn3(conv3d(layers.dr2, 256, name='dvideo_h3')))
+        layers.dr3 = lrelu(self.d_bn3(conv3d(layers.dr2, 128, name='dvideo_h3')))
         print "dr3:", layers.dr3.get_shape().as_list()
         layers.d4 = linear(tf.reshape(layers.dr3, [self.batch_size, -1]), 1, 'dvideo_h4')
         print "d4:", layers.d4.get_shape().as_list()
