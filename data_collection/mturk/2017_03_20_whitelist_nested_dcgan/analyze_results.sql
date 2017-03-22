@@ -35,7 +35,7 @@ create table mturk_swap (
 
 -- Change the file path to whereever your results csv is, has to be absolute path too
 -- Also don't forget to delete the first line of the csv
-\copy mturk_swap from '/home/jonathan/Documents/2017/ece496/gif-gan/data_collection/mturk/2017_03_20_whitelist_rnn/Batch_2733000_batch_results.csv' delimiter ','  csv;
+\copy mturk_swap from '/home/jonathan/Documents/2017/ece496/gif-gan/data_collection/mturk/2017_03_20_whitelist_nested_dcgan/Batch_2733070_batch_results.csv' delimiter ','  csv;
 
 -- Unswap the swapped pairs
 drop view if exists mturk cascade;

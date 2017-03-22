@@ -38,7 +38,7 @@ create table mturk (
 select
     avg(WorkTimeInSeconds) average_completion_time,
     count(case when Answer_choice='optionA' then 1 end)*100.0/
-    count(case when Answer_choice='optionB' then 1 end) percentage_prefer_a,
+    count(*) percentage_prefer_a,
     count(distinct WorkerId) num_workers
 from mturk;
 
