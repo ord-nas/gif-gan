@@ -2,7 +2,6 @@ import cv2
 import random
 import argparse
 import os
-import sample_frames
 import tensorflow as tf
 import numpy as np
 from utils import transform, save_images, get_images, inverse_transform
