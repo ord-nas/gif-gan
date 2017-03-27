@@ -102,6 +102,12 @@ def prep_for_mp4(im, scaled_size):
     im = cv2.resize(im, scaled_size, interpolation=cv2.INTER_LINEAR)
     return im
 
+def pad_batch(batch):
+    empty_frame = np.zeros((args.image_size, args.image_size, args.c_dim))
+    empty_video = [empty_frame] * args.vid_length
+    pad = [empty_video] * (args.video_batch_size - len(batch))
+    return batch + pad
+
 def process_batch(
         batch,
         batch_fname,
@@ -116,7 +122,7 @@ def process_batch(
         sess):
 
     # Construct numpy array for the image batch and activation batch
-    targets = np.array(batch)
+    targets = np.array(pad_batch(batch))
     full_shape = targets.shape
     all_target_activations = np.stack([sess.run(target_activations_tensor,
                                                 feed_dict={
@@ -310,9 +316,7 @@ def main():
             if vid:
                 batch.append(vid)
                 batch_fname.append(fname)
-        # If we have less than one batch left over at the end, we just throw it
-        # out because I'm lazy
-        if len(batch) == args.video_batch_size:
+        if batch:
             process_batch(batch,
                           batch_fname,
                           dcgan,
@@ -324,9 +328,6 @@ def main():
                           activations_placeholder,
                           target_placeholder,
                           sess)
-        else:
-            for fname in batch_fname:
-                print "Skipping %s because not enough to make a full batch!" % fname
 
 if __name__ == "__main__":
     main()
