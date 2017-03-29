@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import os
+import imageio
 
 import utils
 from z_model_lib import VID_DCGAN
@@ -21,6 +22,10 @@ flags.DEFINE_string("output_directory", "", "Directory to write output gifs")
 flags.DEFINE_integer("random_seed", 0, "Random numpy seed to use [0]")
 flags.DEFINE_boolean("continuous", False, "Enable infinite video generation")
 FLAGS = flags.FLAGS
+
+def imageio_make_gif(video, filename, fps=25):
+    video = ((video+1)/2*255).astype(np.uint8)
+    imageio.mimsave(filename, video, fps=fps)
 
 def main(_):
     utils.pp.pprint(flags.FLAGS.__flags)
@@ -52,7 +57,6 @@ def main(_):
             vid_dcgan.load_checkpoint(sess, FLAGS.checkpoint_dir)
 
             fps = 25.0
-            duration = (1.0 / fps) * vid_dcgan.vid_length
 
             tmp_filename = os.path.join(FLAGS.output_directory, "tmp.gif")
             while True:
@@ -70,7 +74,7 @@ def main(_):
                                                   vid_dcgan.c_dim])
                     upper_bound = min(FLAGS.num_samples, i+vid_dcgan.batch_size)
                     for j in xrange(i, upper_bound):
-                        utils.make_gif(videos[j - i, :, :, :, :], tmp_filename, duration)
+                        imageio_make_gif(videos[j - i, :, :, :, :], tmp_filename, fps)
                         filename = os.path.join(FLAGS.output_directory, "%d.gif" % j)
                         os.rename(tmp_filename, filename)
                 if not FLAGS.continuous:
