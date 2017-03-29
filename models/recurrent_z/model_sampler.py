@@ -19,6 +19,7 @@ flags.DEFINE_string("checkpoint_dir", "", "Directory to load checkpoint from")
 flags.DEFINE_integer("num_samples", 1000, "Number of sample gifs to generate [1000]")
 flags.DEFINE_string("output_directory", "", "Directory to write output gifs")
 flags.DEFINE_integer("random_seed", 0, "Random numpy seed to use [0]")
+flags.DEFINE_boolean("continuous", False, "Enable infinite video generation")
 FLAGS = flags.FLAGS
 
 def main(_):
@@ -53,22 +54,28 @@ def main(_):
             fps = 25.0
             duration = (1.0 / fps) * vid_dcgan.vid_length
 
-            for i in xrange(0, FLAGS.num_samples, vid_dcgan.batch_size):
-                # Generate some z-vectors for one video.
-                sample_z = np.random.uniform(-1, 1, size=(vid_dcgan.batch_size, vid_z_dim))
-                samples = sess.run(vid_dcgan.img_dcgan.sampler, feed_dict={
-                    vid_dcgan.z: sample_z,
-                    vid_dcgan.is_training: False,
-                })
-                videos = np.reshape(samples, [vid_dcgan.batch_size,
-                                              vid_dcgan.vid_length,
-                                              vid_dcgan.output_image_size,
-                                              vid_dcgan.output_image_size,
-                                              vid_dcgan.c_dim])
-                upper_bound = min(FLAGS.num_samples, i+vid_dcgan.batch_size)
-                for j in xrange(i, upper_bound):
-                    filename = os.path.join(FLAGS.output_directory, "%d.gif" % j)
-                    utils.make_gif(videos[j - i, :, :, :, :], filename, duration)
+            tmp_filename = os.path.join(FLAGS.output_directory, "tmp.gif")
+            while True:
+                for i in xrange(0, FLAGS.num_samples, vid_dcgan.batch_size):
+                    # Generate some z-vectors for one video.
+                    sample_z = np.random.uniform(-1, 1, size=(vid_dcgan.batch_size, vid_z_dim))
+                    samples = sess.run(vid_dcgan.img_dcgan.sampler, feed_dict={
+                        vid_dcgan.z: sample_z,
+                        vid_dcgan.is_training: False,
+                    })
+                    videos = np.reshape(samples, [vid_dcgan.batch_size,
+                                                  vid_dcgan.vid_length,
+                                                  vid_dcgan.output_image_size,
+                                                  vid_dcgan.output_image_size,
+                                                  vid_dcgan.c_dim])
+                    upper_bound = min(FLAGS.num_samples, i+vid_dcgan.batch_size)
+                    for j in xrange(i, upper_bound):
+                        utils.make_gif(videos[j - i, :, :, :, :], tmp_filename, duration)
+                        filename = os.path.join(FLAGS.output_directory, "%d.gif" % j)
+                        os.rename(tmp_filename, filename)
+                if not FLAGS.continuous:
+                    break
+                print "\n\n***Finished one iteration***\n\n"
 
 if __name__ == '__main__':
     tf.app.run()
