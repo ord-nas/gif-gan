@@ -10,7 +10,8 @@ from model import DCGAN
 
 # Params for algorithm
 parser = argparse.ArgumentParser()
-parser.add_argument("--input_videos", required=True, nargs='+', help="Search for first frame of these videos")
+parser.add_argument("--input_videos", default=[], nargs='*', help="Search for first frame of these videos")
+parser.add_argument("--input_images", default=[], nargs='*', help="Search for these images")
 parser.add_argument("--random_seed", type=int, default=0)
 parser.add_argument("--num_rows", type=int, default=8)
 parser.add_argument("--num_cols", type=int, default=8)
@@ -63,7 +64,7 @@ def load_dcgan(sess, args):
     saver.restore(sess, os.path.join(args.checkpoint_directory, ckpt_name))
     return dcgan
 
-def load_image(video_file, image_size):
+def load_first_frame(video_file, image_size):
     cap = cv2.VideoCapture(video_file)
     frame = None
     if cap.isOpened():
@@ -71,6 +72,14 @@ def load_image(video_file, image_size):
         if ret:
             frame = im
     assert frame is not None
+    frame_size = (image_size, image_size)
+    frame = cv2.resize(frame, frame_size, interpolation=cv2.INTER_LINEAR)
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    frame = transform(frame, is_crop=False)
+    return frame
+
+def load_image(image_file, image_size):
+    frame = cv2.imread(image_file)
     frame_size = (image_size, image_size)
     frame = cv2.resize(frame, frame_size, interpolation=cv2.INTER_LINEAR)
     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -91,7 +100,10 @@ def main():
     # Load the list of video files
     targets = []
     for v in args.input_videos:
-        targets.append(load_image(v, args.image_size))
+        targets.append(load_first_frame(v, args.image_size))
+    for img in args.input_images:
+        targets.append(load_image(img, args.image_size))
+    assert len(targets) > 0
     assert dcgan.batch_size % len(targets) == 0
     replicas = dcgan.batch_size / len(targets)
     print "TARGETS:", len(targets), targets[0].shape
