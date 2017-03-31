@@ -79,8 +79,8 @@ def main():
     args = parser.parse_args()
     config = os.path.abspath(os.path.join(args.opencv_data_dir, args.classifier_config_file))
     cc = cv2.CascadeClassifier(config)
-    filename = "/home/sandro/Documents/ECE496/gif-gan/data_collection/3o7TKtZqP4MyMG5QC4.mp4"
-    webcam = cv2.VideoCapture(filename)#args.capture_device)
+    #filename = "/home/sandro/Documents/ECE496/gif-gan/data_collection/3o7TKtZqP4MyMG5QC4.mp4"
+    webcam = cv2.VideoCapture(args.capture_device)
 
     # Make output directory if it doesn't exist
     if not os.path.exists(args.local_output_directory):
@@ -95,6 +95,7 @@ def main():
 
         # Do scp
         capture_file = os.path.join(args.local_output_directory, "webcam_face_capture.png")
+        #capture_file = "/home/sandro/Documents/ECE496/my-face/turning/target.png"
         face = cv2.resize(face,(args.target_width,args.target_height), interpolation=args.resize_interpolation_method)
         cv2.imwrite(capture_file, face)
         host = "%s@%s" % (args.remote_username, args.remote_host[0])
@@ -114,9 +115,17 @@ def main():
         reconstruction = cv2.imread("%s/output/final.png" % args.local_output_directory)
 
         # Show result
+        face = cv2.resize(face,(200,200), interpolation=args.resize_interpolation_method)
+        #face = np.zeros((400,400,3), dtype=np.uint8)
+        reconstruction = cv2.resize(reconstruction,(200,200), interpolation=args.resize_interpolation_method)
+        cv2.namedWindow("Original")
+        cv2.namedWindow("Reconstruction")
         cv2.imshow("Original", face)
         cv2.imshow("Reconstruction", reconstruction)
-        cv2.waitKey(-1)
+        cv2.moveWindow("Reconstruction", 200, 0)
+        key = -1
+        while key == -1:
+            key = cv2.waitKey(50)
         cv2.destroyAllWindows()
         return
         
