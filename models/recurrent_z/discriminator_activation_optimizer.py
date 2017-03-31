@@ -5,13 +5,14 @@ import os
 import sample_frames
 import tensorflow as tf
 import numpy as np
-from utils import transform, save_images, get_images
+from utils import transform, inverse_transform, save_images, get_images
 from model import DCGAN
 
 # Params for algorithm
 parser = argparse.ArgumentParser()
 parser.add_argument("--input_videos", default=[], nargs='*', help="Search for first frame of these videos")
 parser.add_argument("--input_images", default=[], nargs='*', help="Search for these images")
+parser.add_argument("--input_paths", default=[], nargs='*', help="Paths to apply")
 parser.add_argument("--random_seed", type=int, default=0)
 parser.add_argument("--num_rows", type=int, default=8)
 parser.add_argument("--num_cols", type=int, default=8)
@@ -20,6 +21,8 @@ parser.add_argument("--learning_rate", type=float, default=0.0002, help="Learnin
 parser.add_argument("--beta1", type=float, default=0.5, help="Momentum term of adam [0.5]")
 parser.add_argument("--discriminator_mode", required=True, choices=["train", "inference"])
 parser.add_argument("--sample_dir", required=True, help="Directory name to save the image samples")
+parser.add_argument("--reps", type=int, default=1, help="Number of times to repreat each frame")
+parser.add_argument("--video_scale", type=int, default=1, help="How much to scale up each dim of video")
 # Loss weights
 parser.add_argument("--pixel_L2_weight", type=float, default=0.0, help="L2 loss over pixel data")
 parser.add_argument("--pixel_L1_weight", type=float, default=0.0, help="L1 loss over pixel data")
@@ -86,6 +89,22 @@ def load_image(image_file, image_size):
     frame = transform(frame, is_crop=False)
     return frame
 
+def parse_video_description(path, dcgan):
+    name, ext = os.path.splitext(path)
+    if ext == ".txt":
+        with open(path, 'r') as f:
+            description = f.read()
+        from numpy import array
+        obj = eval(description) # Shut up, this doesn't need to be secure.
+    else:
+        assert ext == ".npy", "Can't read video description!"
+        obj = np.load(path)
+        obj = list(obj)
+    for x in obj:
+        if x.shape != (dcgan.z_dim,):
+            raise Exception("z-dim doesn't match")
+    return obj
+
 def main():
     args = parser.parse_args()
     sess = tf.Session()
@@ -118,7 +137,7 @@ def main():
     print "TARGET ACTIVATIONS:", target_activations[0]
 
     # Save the target to disk
-    save_images(targets_array, [replicas, len(targets)],
+    save_images(targets_array, [args.num_rows, args.num_cols],
                 os.path.join(args.sample_dir, "target.png"))
 
     # Build optimizers for making the image match the target
@@ -225,19 +244,38 @@ def main():
                 os.path.join(args.sample_dir, "final.png"))
     print "Saved final images"
 
-    # TODO FIXME
-    # print "Final activation distances:"
-    # ds = sess.run(activations_distance)
-    # for d in ds:
-    #     print d
+    # Load & apply path descriptions
+    paths = []
+    for path in args.input_paths:
+        abs_d = parse_video_description(path, dcgan)
+        rel_d = [np.subtract(x, abs_d[0]) for x in abs_d]
+        paths.append(rel_d)
 
-    # print "Sanity check activation distances:"
-    # final_activations = sess.run(target_activations_tensor, feed_dict={
-    #     dcgan.images: samples,
-    # })
-    # for i in xrange(dcgan.batch_size):
-    #     a = final_activations[i]
-    #     print np.linalg.norm(a - target_activations[0])
+    initial_z = sess.run(dcgan.z)
+    for (i, path) in enumerate(paths):
+        zs = [np.add(x, initial_z) for x in path]
+        batches = [sess.run(imgs_tensor, feed_dict={dcgan.z: z}) for z in zs]
+        sz = args.image_size * args.video_scale
+        frame_size = (args.num_cols * sz, args.num_rows * sz)
+        w = cv2.VideoWriter(os.path.join(args.sample_dir, "path_%02d.mp4" % i),
+                            0x20, 25.0, frame_size)
+        for batch in batches:
+            frame = np.zeros(shape=[args.num_rows * sz,
+                                    args.num_cols * sz,
+                                    args.c_dim],
+                             dtype=np.uint8)
+            for r in xrange(args.num_rows):
+                for c in xrange(args.num_cols):
+                    im = inverse_transform(batch[r*args.num_cols+c,:,:])
+                    im = np.around(im * 255).astype('uint8')
+                    im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+                    im = cv2.resize(im, (sz, sz), interpolation=cv2.INTER_LINEAR)
+                    frame[r*sz:(r+1)*sz, c*sz:(c+1)*sz, :] = im
+            for _ in xrange(args.reps):
+                w.write(frame)
+        w.release()
+
+
 
 if __name__ == "__main__":
     main()
