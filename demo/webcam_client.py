@@ -10,10 +10,11 @@ import sys
 parser = argparse.ArgumentParser()
 # Input/output params
 parser.add_argument("--capture_device", type=int, default=0, help="Device id to use as webcam")
+parser.add_argument("--local_output_directory", required=True, help="Local directory to place output")
 # Remote params
 parser.add_argument("--remote_username", required=True, help="Username to use for remote login")
 parser.add_argument("--remote_host", default=["ug55.eecg.utoronto.ca"], nargs='+', help="Remote hosts to access")
-parser.add_argument("--remote_target_directory", default="/thesis0/yccggrp/demo/webcam", help="Directory to place output")
+parser.add_argument("--remote_target_directory", default="/thesis0/yccggrp/demo/webcam", help="Remote directory to place output")
 # Params for the Haar Cascade Classifier
 parser.add_argument("--opencv_data_dir", default="classifier_configs", help="Directory from which to load classifier config file")
 parser.add_argument("--classifier_config_file", default="haarcascade_frontalface_alt2.xml", help="Classifier config file")
@@ -74,30 +75,51 @@ def get_face_from_webcam(webcam, cc, args):
         if key == 10 and valid_face:
             return original_im[y1:y2+1,x1:x2+1]
 
-
 def main():
     args = parser.parse_args()
     config = os.path.abspath(os.path.join(args.opencv_data_dir, args.classifier_config_file))
     cc = cv2.CascadeClassifier(config)
     filename = "/home/sandro/Documents/ECE496/gif-gan/data_collection/3o7TKtZqP4MyMG5QC4.mp4"
     webcam = cv2.VideoCapture(filename)#args.capture_device)
+
+    # Make output directory if it doesn't exist
+    if not os.path.exists(args.local_output_directory):
+        os.makedirs(args.local_output_directory)
     
     while True:
         face = get_face_from_webcam(webcam, cc, args)
         cv2.imshow("Webcam", face)
         cv2.waitKey(1000)
+        cv2.destroyAllWindows()
+        cv2.waitKey(50)
 
         # Do scp
-        capture_file = "webcam_face_capture.png"
+        capture_file = os.path.join(args.local_output_directory, "webcam_face_capture.png")
         face = cv2.resize(face,(args.target_width,args.target_height), interpolation=args.resize_interpolation_method)
         cv2.imwrite(capture_file, face)
-        dest_path = "%s@%s:%s" % (args.remote_username,
-                                  args.remote_host[0],
-                                  args.remote_target_directory)
-        ret = subprocess.call(["scp", capture_file, dest_path], stdout=sys.stdout, stderr=sys.stderr)
+        host = "%s@%s" % (args.remote_username, args.remote_host[0])
+        remote_path = "%s:%s" % (host, args.remote_target_directory)
+        ret = subprocess.call(["scp", capture_file, remote_path], stdout=sys.stdout, stderr=sys.stderr)
         assert ret == 0
-        return
 
+        # Execute remote command
+        ret = subprocess.call(["ssh", host, "/thesis0/yccggrp/demo/webcam/run_webcam_demo"],
+                              stdout=sys.stdout, stderr=sys.stderr)
+        assert ret == 0
+
+        # Retrieve result
+        src_path = "%s/output" % remote_path
+        ret = subprocess.call(["scp", "-r", src_path, args.local_output_directory])
+        assert ret == 0
+        reconstruction = cv2.imread("%s/output/final.png" % args.local_output_directory)
+
+        # Show result
+        cv2.imshow("Original", face)
+        cv2.imshow("Reconstruction", reconstruction)
+        cv2.waitKey(-1)
+        cv2.destroyAllWindows()
+        return
+        
 if __name__ == "__main__":
     main()
 
