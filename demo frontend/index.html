@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <title>Facial Expression Generation</title>
+
+    <!-- Bootstrap Core CSS -->
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link href="css/scrolling-nav.css" rel="stylesheet">
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+<!--[if lt IE 9]>
+    <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+    <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+</head>
+
+<!-- The #page-top ID is part of the scrolling feature - the data-spy and data-target are part of the built-in Bootstrap scrollspy function -->
+
+<body id="page-top" data-spy="scroll" data-target=".navbar-fixed-top">
+
+    <!-- Navigation -->
+    <nav class="navbar navbar-default navbar-fixed-top" role="navigation">
+        <div class="container">
+            <div class="navbar-header page-scroll">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-ex1-collapse">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand page-scroll" href="#page-top">Facial Expression Generation</a>
+            </div>
+
+            <!-- Collect the nav links, forms, and other content for toggling -->
+            <div class="collapse navbar-collapse navbar-ex1-collapse">
+                <ul class="nav navbar-nav">
+                    <!-- Hidden li included to remove active class from about link when scrolled up past about section -->
+                    <li class="hidden">
+                        <a class="page-scroll" href="#page-top"></a>
+                    </li>
+                    <li>
+                        <a class="page-scroll" href="#about">Time-Striding Architecture</a>
+                    </li>
+                    <li>
+                        <a class="page-scroll" href="#services">Recurrent Architecture</a>
+                    </li>
+                    <li>
+                        <a class="page-scroll" href="#contact">Nested Architecture</a>
+                    </li>
+                </ul>
+            </div>
+            <!-- /.navbar-collapse -->
+        </div>
+        <!-- /.container -->
+    </nav>
+
+    <!-- Intro Section -->
+    <div id="intro" class="intro-section">
+    <p> Intro of our Project and Team </p>
+    </div>
+
+
+
+    <!-- About Section -->
+    <div id="about" class="about-section">
+        <div id="myCarousel1" class="carousel slide">
+            <!-- Indicators -->
+            <ol class="carousel-indicators">
+                <li data-target="#myCarousel1" data-slide-to="0" class="active"></li>
+                <li data-target="#myCarousel1" data-slide-to="1"></li>
+                <li data-target="#myCarousel1" data-slide-to="2"></li>
+            </ol>
+
+            <!-- Wrapper for Slides -->
+            <div class="carousel-inner">
+                <div class="item active">
+                    <!-- Set the first background image using inline CSS below. -->
+                    <div class="carousel-caption">
+                        <div class="row">
+                            <div class="col-lg-12">
+                                <h1>Time-Striding Architecture 1</h1>
+                                <!-- Page Content -->
+                                <div class="row">
+
+                                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                        <a class="thumbnail" href="#">
+                                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                        </a>
+                                    </div>
+                                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                        <a class="thumbnail" href="#">
+                                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                        </a>
+                                    </div>
+                                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                        <a class="thumbnail" href="#">
+                                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                        </a>
+                                    </div>
+                                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                        <a class="thumbnail" href="#">
+                                           <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                       </a>
+                                   </div>
+                                   <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="item">
+                <!-- Set the second background image using inline CSS below. -->
+                <div class="carousel-caption">
+                   <div class="row">
+                    <div class="col-lg-12">
+                        <h1>Time-Striding Architecture 2</h1>
+                        <div class="row">
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                   <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                               </a>
+                           </div>
+                           <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="item">
+        <!-- Set the third background image using inline CSS below. -->
+        <div class="carousel-caption">
+            <div class="row">
+                <div class="col-lg-12">
+                    <h1>Time-Striding Architecture 3</h1>
+                    <div class="row">
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>     
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                               <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                           </a>
+                       </div>
+                       <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- Controls -->
+<a class="left carousel-control" href="#myCarousel1" data-slide="prev">
+    <span class="icon-prev"></span>
+</a>
+<a class="right carousel-control" href="#myCarousel1" data-slide="next">
+    <span class="icon-next"></span>
+</a>
+
+</div>
+</div>
+
+<!-- Services Section -->
+<div id="services" class="services-section">
+    <div id="myCarousel2" class="carousel slide">
+        <!-- Indicators -->
+        <ol class="carousel-indicators">
+            <li data-target="#myCarousel2" data-slide-to="0" class="active"></li>
+            <li data-target="#myCarousel2" data-slide-to="1"></li>
+            <li data-target="#myCarousel2" data-slide-to="2"></li>
+        </ol>
+
+        <!-- Wrapper for Slides -->
+        <div class="carousel-inner">
+            <div class="item active">
+                <!-- Set the first background image using inline CSS below. -->
+                <div class="carousel-caption">
+                    <div class="row">
+                        <div class="col-lg-12">
+                            <h1>Recurrent Architecture 1</h1>
+                            <!-- Page Content -->
+                            <div class="row">
+
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                       <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                   </a>
+                               </div>
+                               <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="item">
+            <!-- Set the second background image using inline CSS below. -->
+            <div class="carousel-caption">
+               <div class="row">
+                <div class="col-lg-12">
+                    <h1>Recurrent Architecture 2</h1>
+                    <div class="row">
+
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                               <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                           </a>
+                       </div>
+                       <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="item">
+    <!-- Set the third background image using inline CSS below. -->
+    <div class="carousel-caption">
+        <div class="row">
+            <div class="col-lg-12">
+                <h1>Recurrent Architecture 3</h1>
+                <div class="row">
+
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>     
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                           <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                       </a>
+                   </div>
+                   <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+</div>
+
+<!-- Controls -->
+<a class="left carousel-control" href="#myCarousel2" data-slide="prev">
+    <span class="icon-prev"></span>
+</a>
+<a class="right carousel-control" href="#myCarousel2" data-slide="next">
+    <span class="icon-next"></span>
+</a>
+
+</div>
+</div>
+
+<!-- Contact Section -->
+<div id="contact" class="contact-section">
+    <div id="myCarousel" class="carousel slide">
+        <!-- Indicators -->
+        <ol class="carousel-indicators">
+            <li data-target="#myCarousel" data-slide-to="0" class="active"></li>
+            <li data-target="#myCarousel" data-slide-to="1"></li>
+            <li data-target="#myCarousel" data-slide-to="2"></li>
+        </ol>
+
+        <!-- Wrapper for Slides -->
+        <div class="carousel-inner">
+            <div class="item active">
+                <!-- Set the first background image using inline CSS below. -->
+                <div class="carousel-caption">
+                    <div class="row">
+                        <div class="col-lg-12">
+                            <h1>Nested Architecture 1</h1>
+                            <!-- Page Content -->
+                            <div class="row">
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                    </a>
+                                </div>
+                                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                    <a class="thumbnail" href="#">
+                                       <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                   </a>
+                               </div>
+                               <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                            <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                                <a class="thumbnail" href="#">
+                                    <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="item">
+            <!-- Set the second background image using inline CSS below. -->
+            <div class="carousel-caption">
+               <div class="row">
+                <div class="col-lg-12">
+                    <h1>Nested Architecture 2</h1>
+                    <div class="row">
+
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                                <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                            </a>
+                        </div>
+                        <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                            <a class="thumbnail" href="#">
+                               <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                           </a>
+                       </div>
+                       <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="item">
+    <!-- Set the third background image using inline CSS below. -->
+    <div class="carousel-caption">
+        <div class="row">
+            <div class="col-lg-12">
+                <h1>Nested Architecture 3</h1>
+                <div class="row">
+
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                            <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                        </a>     
+                    </div>
+                    <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                        <a class="thumbnail" href="#">
+                           <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                       </a>
+                   </div>
+                   <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-4 col-xs-6 thumb">
+                    <a class="thumbnail" href="#">
+                        <img class="img-responsive" src="https://media.giphy.com/media/iEs4yXq5rVlL2/giphy.gif" alt="">
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+</div>
+
+<!-- Controls -->
+<a class="left carousel-control" href="#myCarousel" data-slide="prev">
+    <span class="icon-prev"></span>
+</a>
+<a class="right carousel-control" href="#myCarousel" data-slide="next">
+    <span class="icon-next"></span>
+</a>
+
+</div>
+</div>
+
+<!-- jQuery -->
+<script src="js/jquery.js"></script>
+
+<!-- Bootstrap Core JavaScript -->
+<script src="js/bootstrap.min.js"></script>
+
+<!-- Scrolling Nav JavaScript -->
+<script src="js/jquery.easing.min.js"></script>
+<script src="js/scrolling-nav.js"></script>
+<script>
+    $('.carousel').carousel({
+        interval: 5000 //changes the speed
+    })
+</script>
+
+</body>
+
+</html>
