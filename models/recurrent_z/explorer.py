@@ -12,7 +12,7 @@ For example:
 python explorer.py --checkpoint_directory DCGAN_checkpoints/r0/face_stills_v0_64_64_saver_version_1/ --save_directory MY_SAVE_DIR --batch_size 1 --port 8080
 """
 
-from bottle import route, run, template, static_file, request
+from bottle import route, run, template, static_file, request, BaseRequest
 from model import DCGAN
 import argparse
 import tensorflow as tf
@@ -22,6 +22,9 @@ import time
 from utils import inverse_transform
 import cv2
 import sys
+
+
+BaseRequest.MEMFILE_MAX = 1024 * 1024
 
 parser = argparse.ArgumentParser()
 # Input/output params
@@ -89,7 +92,7 @@ def write_video(frame_rate, state):
 #   directions: string of textified numpy array
 #   direction_paths: 2d list of strings (paths to images)
 
-@route('/test_last')
+@route('/test_last', method=['GET', 'POST'])
 def test_last():
     global state
     if not state.response:
@@ -99,7 +102,7 @@ def test_last():
         }
     return state.response
 
-@route('/test_success')
+@route('/test_success', method=['GET', 'POST'])
 def test_success():
     global state
     sess = state.sess
@@ -127,7 +130,7 @@ def test_success():
     }
     return state.response
 
-@route('/test_error')
+@route('/test_error', method=['GET', 'POST'])
 def test_error():
     return {
         "response": "error",
@@ -167,7 +170,7 @@ def update_direction_imgs(state, step_size):
     state.add_individually = False
     update_direction_paths(state)
 
-@route('/init_face')
+@route('/init_face', method=['GET', 'POST'])
 def init_face():
     global state
     step_size = float(request.params.get('step_size'))
@@ -177,7 +180,7 @@ def init_face():
     update_direction_imgs(state, step_size)
     return get_response(state)
 
-@route('/init_directions')
+@route('/init_directions', method=['GET', 'POST'])
 def init_directions():
     global state
     step_size = float(request.params.get('step_size'))
@@ -188,7 +191,7 @@ def init_directions():
     update_direction_imgs(state, step_size)
     return get_response(state)
 
-@route('/clear_directions')
+@route('/clear_directions', method=['GET', 'POST'])
 def clear_directions():
     global state
     state.directions = None
@@ -196,14 +199,14 @@ def clear_directions():
     state.direction_paths = []
     return get_response(state)
 
-@route('/update_step_size')
+@route('/update_step_size', method=['GET', 'POST'])
 def update_step_size():
     global state
     step_size = float(request.params.get('step_size'))
     update_direction_imgs(state, step_size)
     return get_response(state)
 
-@route('/random_faces')
+@route('/random_faces', method=['GET', 'POST'])
 def random_faces():
     global state
     state.directions = None
@@ -214,14 +217,14 @@ def random_faces():
     update_direction_paths(state)
     return get_response(state)
 
-@route('/clear_faces')
+@route('/clear_faces', method=['GET', 'POST'])
 def clear_faces():
     global state
     state.video_zs = []
     state.video_paths = []
     return get_response(state)
 
-@route('/perp_faces')
+@route('/perp_faces', method=['GET', 'POST'])
 def perp_faces():
     global state
     similarity = float(request.params.get('similarity'))
@@ -251,7 +254,7 @@ def perp_faces():
     update_direction_paths(state)
     return get_response(state)
 
-@route('/add_image')
+@route('/add_image', method=['GET', 'POST'])
 def add_image():
     global state
     row = int(request.params.get('row'))
@@ -264,7 +267,7 @@ def add_image():
     update_direction_imgs(state, step_size)
     return get_response(state)
 
-@route('/get_similar')
+@route('/get_similar', method=['GET', 'POST'])
 def get_similar():
     global state
     row = int(request.params.get('row'))
@@ -296,7 +299,7 @@ def get_similar():
         update_direction_imgs(state, step_size)
         return get_response(state)
 
-@route('/delete_image')
+@route('/delete_image', method=['GET', 'POST'])
 def delete_image():
     global state
     index = int(request.params.get('index'))
@@ -319,7 +322,7 @@ def parse_video_description(description, state):
         #     raise Exception("value(s) out of range")
     return obj
 
-@route('/load_video_description')
+@route('/load_video_description', method=['GET', 'POST'])
 def load_video_description():
     global state
     description = request.params.get('description')
@@ -334,7 +337,7 @@ def load_video_description():
         e = sys.exc_info()[1]
         return get_error("Problem parsing video description: %s" % e)
 
-@route('/load_relative_video_description')
+@route('/load_relative_video_description', method=['GET', 'POST'])
 def load_relative_video_description():
     global state
     if not state.video_zs:
@@ -382,7 +385,7 @@ def index():
 def blank():
     return static_file('blank.jpg', root='explorer_static')
 
-@route('/save')
+@route('/save', method=['GET', 'POST'])
 def save():
     global state
     try:

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+# CUDA
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/cuda/extras/CUPTI/lib64:/thesis0/yccggrp/cuda/lib64"
+export CUDA_HOME="/usr/local/cuda:/thesis0/yccggrp/cuda"
+# OpenCV
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/thesis0/yccggrp/lib/opencv3.2.0/lib"
+export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:/thesis0/yccggrp/lib/opencv3.2.0/lib/pkgconfig/"
+export PYTHONPATH="$PYTHONPATH:/thesis0/yccggrp/lib/python-2.7.9/lib/python2.7/site-packages/"
+# Tensorflow
+source /thesis0/yccggrp/env/bin/activate
+
+rm -rf /thesis0/yccggrp/demo/webcam/output
+
+current_dir=`dirname "$0"`
+time python "$current_dir/../models/recurrent_z/discriminator_activation_optimizer.py" \
+  --input_images /thesis0/yccggrp/demo/webcam/webcam_face_capture.png \
+  --num_rows 4 \
+  --num_cols 4 \
+  --num_steps 1000 \
+  --learning_rate 0.05 \
+  --discriminator_mode inference \
+  --sample_dir /thesis0/yccggrp/demo/webcam/output \
+  --learning_rate 0.05 \
+  --pixel_L2_weight 0.0 \
+  --pixel_L1_weight 1.0 \
+  --activations_L2_weight 0.0 \
+  --activations_L1_weight 0.3 \
+  --generator_loss_weight 0.0 \
+  --checkpoint_directory /thesis0/yccggrp/youngsan/dcgan_runs/r0/checkpoints/face_stills_v0_64_64 \
+  --lr_decay_amount 0.5 \
+  --lr_decay_frequency 5000 \
+  --video_scale 4 \
+  --input_paths /thesis0/yccggrp/youngsan/gif-gan/demo/manual_paths/surprise.txt /thesis0/yccggrp/youngsan/gif-gan/demo/manual_paths/frown.txt  /thesis0/yccggrp/youngsan/gif-gan/demo/manual_paths/shake_head.txt \
+  --progress_vid \
+  --progress_vid_sections 0,1 50,5 100,30 \
+  --sample_frequency 0
+
+#  --input_paths /thesis0/yccggrp/youngsan/gif-gan/demo/manual_paths/smile.txt /thesis0/yccggrp/youngsan/gif-gan/demo/manual_paths/smile_and_blink.txt /thesis0/yccggrp/youngsan/gif-gan/demo/manual_paths/turning.txt /thesis0/yccggrp/youngsan/gif-gan/demo/manual_paths/shake_head.txt
+
+# --input_paths /thesis0/yccggrp/dataset/z_space_v0/output_z/1075XCDxiiaWME_0_66-by-66.npy
+#  --input_paths /thesis0/yccggrp/dataset/z_space_v0/output_z/100x13lfcs0vgA_0_143-by-143.npy

@@ -8,6 +8,11 @@ import numpy as np
 from utils import transform, inverse_transform, save_images, get_images
 from model import DCGAN
 
+def parse_pair(s):
+    pair = [int(value) for value in s.split(",")]
+    assert len(pair) == 2
+    return pair
+
 # Params for algorithm
 parser = argparse.ArgumentParser()
 parser.add_argument("--input_videos", default=[], nargs='*', help="Search for first frame of these videos")
@@ -23,6 +28,7 @@ parser.add_argument("--discriminator_mode", required=True, choices=["train", "in
 parser.add_argument("--sample_dir", required=True, help="Directory name to save the image samples")
 parser.add_argument("--reps", type=int, default=1, help="Number of times to repreat each frame")
 parser.add_argument("--video_scale", type=int, default=1, help="How much to scale up each dim of video")
+parser.add_argument("--sample_frequency", type=int, default=100, help="How often to write samples to disk. Zero for no samples")
 # Loss weights
 parser.add_argument("--pixel_L2_weight", type=float, default=0.0, help="L2 loss over pixel data")
 parser.add_argument("--pixel_L1_weight", type=float, default=0.0, help="L1 loss over pixel data")
@@ -36,10 +42,16 @@ parser.add_argument("--checkpoint_directory", required=True, help="Directory to 
 parser.add_argument("--image_size", type=int, default=64, help="Size of images used")
 parser.add_argument("--output_size", type=int, default=64, help="Size of output images")
 parser.add_argument("--c_dim", type=int, default=3, help="Dimension of image colour")
-# More
+# GUI
 parser.add_argument("--gui", dest="gui", action="store_true")
 parser.add_argument("--no_gui", dest="gui", action="store_false")
 parser.set_defaults(gui=False)
+# Progress video
+parser.add_argument("--progress_vid", dest="progress_vid", action="store_true")
+parser.add_argument("--no_progress_vid", dest="progress_vid", action="store_false")
+parser.set_defaults(progress_vid=False)
+parser.add_argument("--progress_vid_sections", default=[], nargs='*', type=parse_pair)
+parser.add_argument("--progress_vid_frame_rate", default=10.0, type=float)
 
 def load_dcgan(sess, args):
     batch_size = args.num_rows * args.num_cols
@@ -105,6 +117,13 @@ def parse_video_description(path, dcgan):
             raise Exception("z-dim doesn't match")
     return obj
 
+def should_save_frame(i, sections):
+    s = sections[0]
+    for (index, freq) in sections[1:]:
+        if index <= i:
+            s = [index, freq]
+    return (i - s[0]) % s[1] == 0
+
 def main():
     args = parser.parse_args()
     sess = tf.Session()
@@ -134,7 +153,6 @@ def main():
     target_activations = sess.run(target_activations_tensor, feed_dict={
         dcgan.images: targets_array,
     })
-    print "TARGET ACTIVATIONS:", target_activations[0]
 
     # Save the target to disk
     save_images(targets_array, [args.num_rows, args.num_cols],
@@ -202,6 +220,15 @@ def main():
 
     imgs_tensor = dcgan.G if train else dcgan.sampler
 
+    # Prep a writer if we're making a progress vid
+    progress_vid_frame_size = (args.num_cols * args.image_size,
+                               args.num_rows * args.image_size)
+    progress_vid_sections = args.progress_vid_sections or [[0,1]]
+    progress_vid_sections[0][0] = 0
+    if args.progress_vid:
+        w = cv2.VideoWriter(os.path.join(args.sample_dir, "progress.mp4"),
+                            0x20, args.progress_vid_frame_rate, progress_vid_frame_size)
+    
     # Actually do the train loop
     current_lr = args.learning_rate
     freq = args.lr_decay_frequency
@@ -209,7 +236,6 @@ def main():
         _, loss_value, samples = sess.run([optim, loss, imgs_tensor], feed_dict={
             lr_tensor: current_lr,
         })
-        print "Step %d/%d: loss %f" % (i, args.num_steps, loss_value)
         if args.gui:
             frame = get_images(samples, [args.num_rows, args.num_cols])
             frame = np.around(frame * 255).astype('uint8')
@@ -229,15 +255,29 @@ def main():
                 key = cv2.waitKey(0)
             if key == ord('q'):
                 break
-        if i % 100 == 0:
+        # Write samples to disk, if applicable
+        if args.sample_frequency > 0 and i % args.sample_frequency == 0:
             save_images(samples, [args.num_rows, args.num_cols],
                         os.path.join(args.sample_dir, "train_%d.png" % i))
-            print sess.run(dcgan.z)
             print "Saved sample"
         # Decay learning rate, if applicable
         if freq > 0 and i % freq == freq - 1:
             current_lr *= args.lr_decay_amount
             print "SET LEARING RATE TO:", current_lr
+        # Update progress video, if applicable
+        write_progress_frame = args.progress_vid and should_save_frame(i, progress_vid_sections)
+        if write_progress_frame:
+            frame = get_images(samples, [args.num_rows, args.num_cols])
+            assert frame.shape == (progress_vid_frame_size[1], progress_vid_frame_size[0], 3)
+            frame = np.around(frame * 255).astype('uint8')
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            w.write(frame)
+        print "Step %d/%d: loss %f%s" % (i, args.num_steps, loss_value,
+                                         " [saved progress frame]" if write_progress_frame else "")
+            
+    # Finish off progress vid
+    if args.progress_vid:
+        w.release()
 
     samples = sess.run(imgs_tensor)
     save_images(samples, [args.num_rows, args.num_cols],
@@ -245,19 +285,16 @@ def main():
     print "Saved final images"
 
     # Load & apply path descriptions
-    paths = []
-    for path in args.input_paths:
-        abs_d = parse_video_description(path, dcgan)
-        rel_d = [np.subtract(x, abs_d[0]) for x in abs_d]
-        paths.append(rel_d)
-
     initial_z = sess.run(dcgan.z)
-    for (i, path) in enumerate(paths):
+    for (i, path_file) in enumerate(args.input_paths):
+        abs_d = parse_video_description(path_file, dcgan)
+        path = [np.subtract(x, abs_d[0]) for x in abs_d]
         zs = [np.add(x, initial_z) for x in path]
         batches = [sess.run(imgs_tensor, feed_dict={dcgan.z: z}) for z in zs]
         sz = args.image_size * args.video_scale
         frame_size = (args.num_cols * sz, args.num_rows * sz)
-        w = cv2.VideoWriter(os.path.join(args.sample_dir, "path_%02d.mp4" % i),
+        path_name, _ = os.path.splitext(os.path.basename(path_file))
+        w = cv2.VideoWriter(os.path.join(args.sample_dir, "path_%s.mp4" % path_name),
                             0x20, 25.0, frame_size)
         for batch in batches:
             frame = np.zeros(shape=[args.num_rows * sz,

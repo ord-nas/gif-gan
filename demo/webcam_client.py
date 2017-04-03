@@ -5,6 +5,7 @@ import math
 import numpy as np
 import subprocess
 import sys
+import glob
 
 # Params for algorithm
 parser = argparse.ArgumentParser()
@@ -15,6 +16,7 @@ parser.add_argument("--local_output_directory", required=True, help="Local direc
 parser.add_argument("--remote_username", required=True, help="Username to use for remote login")
 parser.add_argument("--remote_host", default=["ug55.eecg.utoronto.ca"], nargs='+', help="Remote hosts to access")
 parser.add_argument("--remote_target_directory", default="/thesis0/yccggrp/demo/webcam", help="Remote directory to place output")
+parser.add_argument("--remote_src_directory", default="/thesis0/yccggrp/youngsan/gif-gan/demo", help="Remote directory to find source")
 # Params for the Haar Cascade Classifier
 parser.add_argument("--opencv_data_dir", default="classifier_configs", help="Directory from which to load classifier config file")
 parser.add_argument("--classifier_config_file", default="haarcascade_frontalface_alt2.xml", help="Classifier config file")
@@ -70,11 +72,129 @@ def get_face_from_webcam(webcam, cc, args):
                 cv2.rectangle(im, (x1, y1), (x2, y2), (255, 255, 255), 2)
                 valid_face = True
 
-        cv2.imshow("Webcam", im)
+        cv2.imshow("Webcam", im[:, ::-1, :])
         key = cv2.waitKey(50)
         if key == 10 and valid_face:
             return original_im[y1:y2+1,x1:x2+1]
 
+def get_face_from_image(path, cc, args):
+    original_im = cv2.imread(path)
+    im = np.copy(original_im)
+
+    # Get face detections on this frame
+    side = math.sqrt(im.shape[0] * im.shape[1])
+    minlen = args.classifier_min_size
+    maxlen = int(side * args.classifier_max_size_factor)
+    features = list(cc.detectMultiScale(
+        im, args.classifier_scale_factor, args.classifier_min_neighbors,
+        args.classifier_flags, (minlen, minlen), (maxlen, maxlen)))
+    assert features
+    best = max(features, key=lambda d: d[2] * d[3])
+    # Expand the box along one axis so the aspect ratio is correct
+    required_aspect_ratio = float(args.target_width)/float(args.target_height)
+    actual_aspect_ratio = float(best[2])/float(best[3])
+    scaling = required_aspect_ratio / actual_aspect_ratio
+    x_scaling = scaling if scaling > 1.0 else 1.0
+    y_scaling = 1.0/scaling if scaling <= 1.0 else 1.0
+    # Find the centre of the box, and expand outward from there
+    centre_x = best[0] + best[2]/2.0
+    centre_y = best[1] + best[3]/2.0
+    assert(centre_x >= 0 and centre_x < im.shape[1])
+    assert(centre_y >= 0 and centre_y < im.shape[0])
+    # We expand to get the right aspect ratio, and on top of that, we
+    # add an additional command-line-specified scaling factor
+    f = args.bounding_box_scaling_factor
+    x1 = int(round(x_scaling * f * (best[0] - centre_x) + centre_x))
+    y1 = int(round(y_scaling * f * (best[1] - centre_y) + centre_y))
+    x2 = int(round(x_scaling * f * (best[0] + best[2] - centre_x) + centre_x))
+    y2 = int(round(y_scaling * f * (best[1] + best[3] - centre_y) + centre_y))
+    # Check if the box is still within the image
+    assert x1 >= 0 and y1 >= 0 and x2 < im.shape[1] and y2 < im.shape[0]
+    cv2.rectangle(im, (x1, y1), (x2, y2), (0, 0, 0), 4)
+    cv2.rectangle(im, (x1, y1), (x2, y2), (255, 255, 255), 2)
+
+    cv2.imshow("Webcam", im)
+    key = cv2.waitKey(50)
+    return original_im[y1:y2+1,x1:x2+1]
+
+def show_reconstruction_image(filename, interp_method):
+    reconstruction = cv2.imread(filename)
+    reconstruction = cv2.resize(reconstruction,(800,800), interpolation=interp_method)
+    cv2.namedWindow("Reconstruction")
+    cv2.imshow("Reconstruction", reconstruction)
+    cv2.moveWindow("Reconstruction", 400, 0)
+    key = -1
+    while key == -1:
+        key = cv2.waitKey(50)
+    cv2.destroyWindow("Reconstruction")
+    return key
+
+def show_progress_video(filename, interp_method):
+    cv2.namedWindow("Progress")
+    cv2.moveWindow("Progress", 400, 0)
+    while True:
+        cap = cv2.VideoCapture(filename)
+        assert cap.isOpened()
+        ret, im = cap.read()
+        assert ret
+        im = cv2.resize(im, (800,800), interpolation=interp_method)
+        for _ in xrange(20):
+            cv2.imshow("Progress", im)
+            key = cv2.waitKey(100)
+            if key != -1:
+                cv2.destroyWindow("Progress")
+                return key
+        while cap.isOpened():
+            ret, next_im = cap.read()
+            if not ret:
+                break
+            im = next_im
+            im = cv2.resize(im, (800,800), interpolation=interp_method)
+            cv2.imshow("Progress", im)
+            key = cv2.waitKey(100)
+            if key != -1:
+                cv2.destroyWindow("Progress")
+                return key
+        for _ in xrange(20):
+            cv2.imshow("Progress", im)
+            key = cv2.waitKey(100)
+            if key != -1:
+                cv2.destroyWindow("Progress")
+                return key
+
+def show_path(filename, interp_method):
+    name, _ = os.path.splitext(os.path.basename(filename))
+    assert name[:5] == "path_"
+    name = name[5:]
+    name = name.replace("_", " ")
+    name = name[0].upper() + name[1:]
+    cv2.namedWindow(name)
+    cv2.moveWindow(name, 400, 0)
+    while True:
+        cap = cv2.VideoCapture(filename)
+        while cap.isOpened():
+            ret, im = cap.read()
+            if not ret:
+                break
+            im = cv2.resize(im, (800,800), interpolation=interp_method)
+            cv2.imshow(name, im)
+            key = cv2.waitKey(100)
+            if key != -1:
+                cv2.destroyWindow(name)
+                return key    
+            
+def carousel(fns):
+    assert fns
+    i = 0
+    while True:
+        key = fns[i]()
+        if key == ord('n') and i < len(fns) - 1:
+            i += 1
+        elif key == ord('p') and i > 0:
+            i -= 1
+        elif key == 10:
+            return
+            
 def main():
     args = parser.parse_args()
     config = os.path.abspath(os.path.join(args.opencv_data_dir, args.classifier_config_file))
@@ -88,6 +208,7 @@ def main():
     
     while True:
         face = get_face_from_webcam(webcam, cc, args)
+        #face = get_face_from_image("/home/sandro/Desktop/IMG_20141012_143608.jpg", cc, args)
         cv2.imshow("Webcam", face)
         cv2.waitKey(1000)
         cv2.destroyAllWindows()
@@ -100,32 +221,40 @@ def main():
         cv2.imwrite(capture_file, face)
         host = "%s@%s" % (args.remote_username, args.remote_host[0])
         remote_path = "%s:%s" % (host, args.remote_target_directory)
-        ret = subprocess.call(["scp", capture_file, remote_path], stdout=sys.stdout, stderr=sys.stderr)
+        ret = subprocess.call(["scp", capture_file, remote_path])
         assert ret == 0
 
         # Execute remote command
-        ret = subprocess.call(["ssh", host, "/thesis0/yccggrp/demo/webcam/run_webcam_demo"],
-                              stdout=sys.stdout, stderr=sys.stderr)
+        ret = subprocess.call(["ssh", host, "%s/run_webcam_demo" % args.remote_src_directory])
         assert ret == 0
 
         # Retrieve result
         src_path = "%s/output" % remote_path
+        ret = subprocess.call(["rm", "-rf", "%s/output" % args.local_output_directory])
+        assert ret == 0
         ret = subprocess.call(["scp", "-r", src_path, args.local_output_directory])
         assert ret == 0
-        reconstruction = cv2.imread("%s/output/final.png" % args.local_output_directory)
 
         # Show result
+        face = cv2.resize(face,(64,64), interpolation=args.resize_interpolation_method)
         face = cv2.resize(face,(200,200), interpolation=args.resize_interpolation_method)
-        #face = np.zeros((400,400,3), dtype=np.uint8)
-        reconstruction = cv2.resize(reconstruction,(200,200), interpolation=args.resize_interpolation_method)
         cv2.namedWindow("Original")
-        cv2.namedWindow("Reconstruction")
         cv2.imshow("Original", face)
-        cv2.imshow("Reconstruction", reconstruction)
-        cv2.moveWindow("Reconstruction", 200, 0)
-        key = -1
-        while key == -1:
-            key = cv2.waitKey(50)
+        cv2.moveWindow("Original", 0, 0)
+
+        # Show reconstruction
+        f1 = lambda: show_reconstruction_image("%s/output/final.png" % args.local_output_directory,
+                                               args.resize_interpolation_method)
+
+        # Show the progress vid
+        f2 = lambda: show_progress_video("%s/output/progress.mp4" % args.local_output_directory,
+                                         args.resize_interpolation_method)
+
+        # Show the path videos
+        paths = glob.glob("%s/output/path_*.mp4" % args.local_output_directory)
+        path_fs = [lambda p=p: show_path(p, args.resize_interpolation_method) for p in paths]
+
+        carousel([f1, f2] + path_fs)
         cv2.destroyAllWindows()
         return
         
