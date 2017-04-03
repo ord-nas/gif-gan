@@ -70,10 +70,80 @@ def get_face_from_webcam(webcam, cc, args):
                 cv2.rectangle(im, (x1, y1), (x2, y2), (255, 255, 255), 2)
                 valid_face = True
 
-        cv2.imshow("Webcam", im)
+        cv2.imshow("Webcam", im[:, ::-1, :])
         key = cv2.waitKey(50)
         if key == 10 and valid_face:
             return original_im[y1:y2+1,x1:x2+1]
+
+def get_face_from_image(path, cc, args):
+    original_im = cv2.imread(path)
+    im = np.copy(original_im)
+
+    # Get face detections on this frame
+    side = math.sqrt(im.shape[0] * im.shape[1])
+    minlen = args.classifier_min_size
+    maxlen = int(side * args.classifier_max_size_factor)
+    features = list(cc.detectMultiScale(
+        im, args.classifier_scale_factor, args.classifier_min_neighbors,
+        args.classifier_flags, (minlen, minlen), (maxlen, maxlen)))
+    assert features
+    best = max(features, key=lambda d: d[2] * d[3])
+    # Expand the box along one axis so the aspect ratio is correct
+    required_aspect_ratio = float(args.target_width)/float(args.target_height)
+    actual_aspect_ratio = float(best[2])/float(best[3])
+    scaling = required_aspect_ratio / actual_aspect_ratio
+    x_scaling = scaling if scaling > 1.0 else 1.0
+    y_scaling = 1.0/scaling if scaling <= 1.0 else 1.0
+    # Find the centre of the box, and expand outward from there
+    centre_x = best[0] + best[2]/2.0
+    centre_y = best[1] + best[3]/2.0
+    assert(centre_x >= 0 and centre_x < im.shape[1])
+    assert(centre_y >= 0 and centre_y < im.shape[0])
+    # We expand to get the right aspect ratio, and on top of that, we
+    # add an additional command-line-specified scaling factor
+    f = args.bounding_box_scaling_factor
+    x1 = int(round(x_scaling * f * (best[0] - centre_x) + centre_x))
+    y1 = int(round(y_scaling * f * (best[1] - centre_y) + centre_y))
+    x2 = int(round(x_scaling * f * (best[0] + best[2] - centre_x) + centre_x))
+    y2 = int(round(y_scaling * f * (best[1] + best[3] - centre_y) + centre_y))
+    # Check if the box is still within the image
+    assert x1 >= 0 and y1 >= 0 and x2 < im.shape[1] and y2 < im.shape[0]
+    cv2.rectangle(im, (x1, y1), (x2, y2), (0, 0, 0), 4)
+    cv2.rectangle(im, (x1, y1), (x2, y2), (255, 255, 255), 2)
+
+    cv2.imshow("Webcam", im)
+    key = cv2.waitKey(50)
+    return original_im[y1:y2+1,x1:x2+1]
+
+def show_progress_video(filename, interp_method):
+    cv2.namedWindow("Progress")
+    cv2.moveWindow("Progress", 400, 0)
+    while True:
+        cap = cv2.VideoCapture(filename)
+        assert cap.isOpened()
+        ret, im = cap.read()
+        assert ret
+        im = cv2.resize(im, (800,800), interpolation=interp_method)
+        for _ in xrange(20):
+            cv2.imshow("Progress", im)
+            key = cv2.waitKey(100)
+            if key != -1:
+                return
+        while cap.isOpened():
+            ret, next_im = cap.read()
+            if not ret:
+                break
+            im = next_im
+            im = cv2.resize(im, (800,800), interpolation=interp_method)
+            cv2.imshow("Progress", im)
+            key = cv2.waitKey(100)
+            if key != -1:
+                return
+        for _ in xrange(20):
+            cv2.imshow("Progress", im)
+            key = cv2.waitKey(100)
+            if key != -1:
+                return
 
 def main():
     args = parser.parse_args()
@@ -88,6 +158,7 @@ def main():
     
     while True:
         face = get_face_from_webcam(webcam, cc, args)
+        #face = get_face_from_image("/home/sandro/Desktop/IMG_20141012_143608.jpg", cc, args)
         cv2.imshow("Webcam", face)
         cv2.waitKey(1000)
         cv2.destroyAllWindows()
@@ -100,12 +171,11 @@ def main():
         cv2.imwrite(capture_file, face)
         host = "%s@%s" % (args.remote_username, args.remote_host[0])
         remote_path = "%s:%s" % (host, args.remote_target_directory)
-        ret = subprocess.call(["scp", capture_file, remote_path], stdout=sys.stdout, stderr=sys.stderr)
+        ret = subprocess.call(["scp", capture_file, remote_path])
         assert ret == 0
 
         # Execute remote command
-        ret = subprocess.call(["ssh", host, "/thesis0/yccggrp/demo/webcam/run_webcam_demo"],
-                              stdout=sys.stdout, stderr=sys.stderr)
+        ret = subprocess.call(["ssh", host, "/thesis0/yccggrp/demo/webcam/run_webcam_demo"])
         assert ret == 0
 
         # Retrieve result
@@ -115,19 +185,26 @@ def main():
         reconstruction = cv2.imread("%s/output/final.png" % args.local_output_directory)
 
         # Show result
+        face = cv2.resize(face,(64,64), interpolation=args.resize_interpolation_method)
         face = cv2.resize(face,(200,200), interpolation=args.resize_interpolation_method)
         #face = np.zeros((400,400,3), dtype=np.uint8)
-        reconstruction = cv2.resize(reconstruction,(200,200), interpolation=args.resize_interpolation_method)
+        reconstruction = cv2.resize(reconstruction,(800,800), interpolation=args.resize_interpolation_method)
         cv2.namedWindow("Original")
         cv2.namedWindow("Reconstruction")
         cv2.imshow("Original", face)
         cv2.imshow("Reconstruction", reconstruction)
-        cv2.moveWindow("Reconstruction", 200, 0)
+        cv2.moveWindow("Original", 0, 0)
+        cv2.moveWindow("Reconstruction", 400, 0)
         key = -1
         while key == -1:
             key = cv2.waitKey(50)
+        cv2.destroyWindow("Reconstruction")
+
+        # Show the progress vid
+        show_progress_video("%s/output/progress.mp4" % args.local_output_directory,
+                            args.resize_interpolation_method)
         cv2.destroyAllWindows()
-        return
+            
         
 if __name__ == "__main__":
     main()
