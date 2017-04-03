@@ -285,19 +285,16 @@ def main():
     print "Saved final images"
 
     # Load & apply path descriptions
-    paths = []
-    for path in args.input_paths:
-        abs_d = parse_video_description(path, dcgan)
-        rel_d = [np.subtract(x, abs_d[0]) for x in abs_d]
-        paths.append(rel_d)
-
     initial_z = sess.run(dcgan.z)
-    for (i, path) in enumerate(paths):
+    for (i, path_file) in enumerate(args.input_paths):
+        abs_d = parse_video_description(path_file, dcgan)
+        path = [np.subtract(x, abs_d[0]) for x in abs_d]
         zs = [np.add(x, initial_z) for x in path]
         batches = [sess.run(imgs_tensor, feed_dict={dcgan.z: z}) for z in zs]
         sz = args.image_size * args.video_scale
         frame_size = (args.num_cols * sz, args.num_rows * sz)
-        w = cv2.VideoWriter(os.path.join(args.sample_dir, "path_%02d.mp4" % i),
+        path_name, _ = os.path.splitext(os.path.basename(path_file))
+        w = cv2.VideoWriter(os.path.join(args.sample_dir, "path_%s.mp4" % path_name),
                             0x20, 25.0, frame_size)
         for batch in batches:
             frame = np.zeros(shape=[args.num_rows * sz,
