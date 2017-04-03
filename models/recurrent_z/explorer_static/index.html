@@ -42,7 +42,7 @@
 
 	 function request(url, params) {
 	     $("#loading-message").dialog("open");
-	     $.getJSON(url, params, update_everything);
+	     $.post(url, params, update_everything, 'json');
 	 }
 
 	 function click_image_request(row, col) {
