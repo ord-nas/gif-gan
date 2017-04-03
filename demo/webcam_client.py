@@ -115,6 +115,18 @@ def get_face_from_image(path, cc, args):
     key = cv2.waitKey(50)
     return original_im[y1:y2+1,x1:x2+1]
 
+def show_reconstruction_image(filename, interp_method):
+    reconstruction = cv2.imread(filename)
+    reconstruction = cv2.resize(reconstruction,(800,800), interpolation=interp_method)
+    cv2.namedWindow("Reconstruction")
+    cv2.imshow("Reconstruction", reconstruction)
+    cv2.moveWindow("Reconstruction", 400, 0)
+    key = -1
+    while key == -1:
+        key = cv2.waitKey(50)
+    cv2.destroyWindow("Reconstruction")
+    return key
+
 def show_progress_video(filename, interp_method):
     cv2.namedWindow("Progress")
     cv2.moveWindow("Progress", 400, 0)
@@ -128,7 +140,8 @@ def show_progress_video(filename, interp_method):
             cv2.imshow("Progress", im)
             key = cv2.waitKey(100)
             if key != -1:
-                return
+                cv2.destroyWindow("Progress")
+                return key
         while cap.isOpened():
             ret, next_im = cap.read()
             if not ret:
@@ -138,13 +151,27 @@ def show_progress_video(filename, interp_method):
             cv2.imshow("Progress", im)
             key = cv2.waitKey(100)
             if key != -1:
-                return
+                cv2.destroyWindow("Progress")
+                return key
         for _ in xrange(20):
             cv2.imshow("Progress", im)
             key = cv2.waitKey(100)
             if key != -1:
-                return
+                cv2.destroyWindow("Progress")
+                return key
 
+def carousel(fns):
+    assert fns
+    i = 0
+    while True:
+        key = fns[i]()
+        if key == ord('n') and i < len(fns) - 1:
+            i += 1
+        elif key == ord('p') and i > 0:
+            i -= 1
+        elif key == 10:
+            return
+            
 def main():
     args = parser.parse_args()
     config = os.path.abspath(os.path.join(args.opencv_data_dir, args.classifier_config_file))
@@ -182,29 +209,25 @@ def main():
         src_path = "%s/output" % remote_path
         ret = subprocess.call(["scp", "-r", src_path, args.local_output_directory])
         assert ret == 0
-        reconstruction = cv2.imread("%s/output/final.png" % args.local_output_directory)
 
         # Show result
         face = cv2.resize(face,(64,64), interpolation=args.resize_interpolation_method)
         face = cv2.resize(face,(200,200), interpolation=args.resize_interpolation_method)
-        #face = np.zeros((400,400,3), dtype=np.uint8)
-        reconstruction = cv2.resize(reconstruction,(800,800), interpolation=args.resize_interpolation_method)
         cv2.namedWindow("Original")
-        cv2.namedWindow("Reconstruction")
         cv2.imshow("Original", face)
-        cv2.imshow("Reconstruction", reconstruction)
         cv2.moveWindow("Original", 0, 0)
-        cv2.moveWindow("Reconstruction", 400, 0)
-        key = -1
-        while key == -1:
-            key = cv2.waitKey(50)
-        cv2.destroyWindow("Reconstruction")
+
+        # Show reconstruction
+        f1 = lambda: show_reconstruction_image("%s/output/final.png" % args.local_output_directory,
+                                               args.resize_interpolation_method)
 
         # Show the progress vid
-        show_progress_video("%s/output/progress.mp4" % args.local_output_directory,
-                            args.resize_interpolation_method)
+        f2 = lambda: show_progress_video("%s/output/progress.mp4" % args.local_output_directory,
+                                         args.resize_interpolation_method)
+
+        carousel([f1, f2])
         cv2.destroyAllWindows()
-            
+        return
         
 if __name__ == "__main__":
     main()
