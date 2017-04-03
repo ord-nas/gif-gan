@@ -5,6 +5,7 @@ import math
 import numpy as np
 import subprocess
 import sys
+import glob
 
 # Params for algorithm
 parser = argparse.ArgumentParser()
@@ -160,6 +161,27 @@ def show_progress_video(filename, interp_method):
                 cv2.destroyWindow("Progress")
                 return key
 
+def show_path(filename, interp_method):
+    name, _ = os.path.splitext(os.path.basename(filename))
+    assert name[:5] == "path_"
+    name = name[5:]
+    name = name.replace("_", " ")
+    name = name[0].upper() + name[1:]
+    cv2.namedWindow(name)
+    cv2.moveWindow(name, 400, 0)
+    while True:
+        cap = cv2.VideoCapture(filename)
+        while cap.isOpened():
+            ret, im = cap.read()
+            if not ret:
+                break
+            im = cv2.resize(im, (800,800), interpolation=interp_method)
+            cv2.imshow(name, im)
+            key = cv2.waitKey(100)
+            if key != -1:
+                cv2.destroyWindow(name)
+                return key    
+            
 def carousel(fns):
     assert fns
     i = 0
@@ -207,6 +229,8 @@ def main():
 
         # Retrieve result
         src_path = "%s/output" % remote_path
+        ret = subprocess.call(["rm", "-rf", "%s/output" % args.local_output_directory])
+        assert ret == 0
         ret = subprocess.call(["scp", "-r", src_path, args.local_output_directory])
         assert ret == 0
 
@@ -225,7 +249,11 @@ def main():
         f2 = lambda: show_progress_video("%s/output/progress.mp4" % args.local_output_directory,
                                          args.resize_interpolation_method)
 
-        carousel([f1, f2])
+        # Show the path videos
+        paths = glob.glob("%s/output/path_*.mp4" % args.local_output_directory)
+        path_fs = [lambda p=p: show_path(p, args.resize_interpolation_method) for p in paths]
+
+        carousel([f1, f2] + path_fs)
         cv2.destroyAllWindows()
         return
         
