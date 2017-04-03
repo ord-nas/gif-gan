@@ -16,6 +16,7 @@ parser.add_argument("--local_output_directory", required=True, help="Local direc
 parser.add_argument("--remote_username", required=True, help="Username to use for remote login")
 parser.add_argument("--remote_host", default=["ug55.eecg.utoronto.ca"], nargs='+', help="Remote hosts to access")
 parser.add_argument("--remote_target_directory", default="/thesis0/yccggrp/demo/webcam", help="Remote directory to place output")
+parser.add_argument("--remote_src_directory", default="/thesis0/yccggrp/youngsan/gif-gan/demo", help="Remote directory to find source")
 # Params for the Haar Cascade Classifier
 parser.add_argument("--opencv_data_dir", default="classifier_configs", help="Directory from which to load classifier config file")
 parser.add_argument("--classifier_config_file", default="haarcascade_frontalface_alt2.xml", help="Classifier config file")
@@ -224,7 +225,7 @@ def main():
         assert ret == 0
 
         # Execute remote command
-        ret = subprocess.call(["ssh", host, "/thesis0/yccggrp/demo/webcam/run_webcam_demo"])
+        ret = subprocess.call(["ssh", host, "%s/run_webcam_demo" % args.remote_src_directory])
         assert ret == 0
 
         # Retrieve result
