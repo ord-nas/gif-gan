@@ -386,7 +386,6 @@ class VID_DCGAN(object):
 
         print "vid:", vid.get_shape().as_list()
         vid = tf.reshape(vid, [self.batch_size, self.vid_length, 8, 8, -1])
-        #first_frames = vid[:, 0:1, :, :, :]
         num_filters = vid.get_shape().as_list()[-1]
         print "vid (reshaped):", vid.get_shape().as_list()
 
@@ -404,12 +403,12 @@ class VID_DCGAN(object):
         # layers.dr0 = tf.nn.relu(self.d_bn0(layers.d0))
         # print "dr0:", layers.dr0.get_shape().as_list()
 
-        layers.dr0 = vid# - first_frames
-        layers.dr1 = tf.nn.max_pool3d(vid, [1, 2, 2, 2, 1], [1, 2, 2, 2, 1], padding='SAME')#lrelu(conv3d(layers.dr0, 128, name='dvideo_h1'))
+        layers.dr0 = vid
+        layers.dr1 = lrelu(conv3d(layers.dr0, 256, name='dvideo_h1'))
         print "dr1:", layers.dr1.get_shape().as_list()
-        layers.dr2 = tf.nn.max_pool3d(layers.dr1, [1, 2, 2, 2, 1], [1, 2, 2, 2, 1], padding='SAME')#lrelu(self.d_bn2(conv3d(layers.dr1, 128, name='dvideo_h2')))
+        layers.dr2 = lrelu(self.d_bn2(conv3d(layers.dr1, 256, name='dvideo_h2')))
         print "dr2:", layers.dr2.get_shape().as_list()
-        layers.dr3 = lrelu(self.d_bn3(conv3d(layers.dr2, 128, name='dvideo_h3')))
+        layers.dr3 = lrelu(self.d_bn3(conv3d(layers.dr2, 256, name='dvideo_h3')))
         print "dr3:", layers.dr3.get_shape().as_list()
         layers.d4 = linear(tf.reshape(layers.dr3, [self.batch_size, -1]), 1, 'dvideo_h4')
         print "d4:", layers.d4.get_shape().as_list()
