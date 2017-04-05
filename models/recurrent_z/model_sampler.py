@@ -16,11 +16,11 @@ flags.DEFINE_integer("c_dim", 3, "Dimension of image color. [3]")
 flags.DEFINE_float("image_noise", 0.0, "Std of noise to add to images")
 flags.DEFINE_float("activation_noise", 0.0, "Std of noise to add to D activations")
 # "Actual" args
-flags.DEFINE_string("checkpoint_dir", "", "Directory to load checkpoint from")
-flags.DEFINE_integer("num_samples", 1000, "Number of sample gifs to generate [1000]")
-flags.DEFINE_string("output_directory", "", "Directory to write output gifs")
+flags.DEFINE_string("checkpoint_dir", "/thesis0/yccggrp/youngsan/vid_dcgan_runs/r23/winner/checkpoints", "Directory to load checkpoint from")
+flags.DEFINE_integer("num_samples", 200, "Number of sample gifs to generate [1000]")
+flags.DEFINE_string("output_directory", "/thesis0/yccggrp/demo/samples/nested/", "Directory to write output gifs")
 flags.DEFINE_integer("random_seed", 0, "Random numpy seed to use [0]")
-flags.DEFINE_boolean("continuous", False, "Enable infinite video generation")
+flags.DEFINE_boolean("continuous", True, "Enable infinite video generation")
 FLAGS = flags.FLAGS
 
 def imageio_make_gif(video, filename, fps=25):

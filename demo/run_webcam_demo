@@ -17,7 +17,7 @@ time python "$current_dir/../models/recurrent_z/discriminator_activation_optimiz
   --input_images /thesis0/yccggrp/demo/webcam/webcam_face_capture.png \
   --num_rows 4 \
   --num_cols 4 \
-  --num_steps 1000 \
+  --num_steps 1200 \
   --learning_rate 0.05 \
   --discriminator_mode inference \
   --sample_dir /thesis0/yccggrp/demo/webcam/output \
@@ -29,7 +29,7 @@ time python "$current_dir/../models/recurrent_z/discriminator_activation_optimiz
   --generator_loss_weight 0.0 \
   --checkpoint_directory /thesis0/yccggrp/youngsan/dcgan_runs/r0/checkpoints/face_stills_v0_64_64 \
   --lr_decay_amount 0.5 \
-  --lr_decay_frequency 5000 \
+  --lr_decay_frequency 1000 \
   --video_scale 4 \
   --input_paths /thesis0/yccggrp/youngsan/gif-gan/demo/manual_paths/smile.txt \
                 /thesis0/yccggrp/youngsan/gif-gan/demo/manual_paths/frown.txt \
