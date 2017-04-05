@@ -16,7 +16,7 @@ class VID_DCGAN(object):
     def __init__(self, sess, batch_size, z_input_size, z_output_size, vid_length,
                  input_image_size, output_image_size, c_dim,
                  sample_cols=8, image_noise_std=0.0, activation_noise_std=0.0,
-                 first_frame_loss_scalar=0.0):
+                 first_frame_loss_scalar=0.0, z=None):
         # Member vars
         self.batch_size = batch_size
         self.z_input_size = z_input_size
@@ -44,12 +44,14 @@ class VID_DCGAN(object):
         self.d_bn4 = batch_norm(name='dvideo_bn4')
 
         # Actually construct the model
-        self.build_model(sess)
+        self.build_model(sess, z)
 
-    def build_model(self, sess):
+    def build_model(self, sess, z):
         # Build generator
-        self.z = tf.placeholder(tf.float32, [self.batch_size, self.z_input_size],
-                                name='gvideo_z')
+        self.z = z
+        if self.z is None:
+            self.z = tf.placeholder(tf.float32, [self.batch_size, self.z_input_size],
+                                    name='gvideo_z')
         self.z_first_frame_component = self.z[:, :self.z_output_size]
         with tf.variable_scope('video_generator'):
             print "Making generator..."
