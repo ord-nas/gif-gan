@@ -294,7 +294,7 @@ def main():
         sz = args.image_size * args.video_scale
         frame_size = (args.num_cols * sz, args.num_rows * sz)
         path_name, _ = os.path.splitext(os.path.basename(path_file))
-        w = cv2.VideoWriter(os.path.join(args.sample_dir, "path_%s.mp4" % path_name),
+        w = cv2.VideoWriter(os.path.join(args.sample_dir, "path_%02d_%s.mp4" % (i, path_name)),
                             0x20, 25.0, frame_size)
         for batch in batches:
             frame = np.zeros(shape=[args.num_rows * sz,
