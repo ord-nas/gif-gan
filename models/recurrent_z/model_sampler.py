@@ -59,6 +59,7 @@ def main(_):
             fps = 25.0
 
             tmp_filename = os.path.join(FLAGS.output_directory, "tmp.gif")
+            cntr = 0
             while True:
                 for i in xrange(0, FLAGS.num_samples, vid_dcgan.batch_size):
                     # Generate some z-vectors for one video.
@@ -79,7 +80,8 @@ def main(_):
                         os.rename(tmp_filename, filename)
                 if not FLAGS.continuous:
                     break
-                print "\n\n***Finished one iteration***\n\n"
+                print "***Finished iteration %d ***" % cntr
+                cntr = cntr + 1
 
 if __name__ == '__main__':
     tf.app.run()
